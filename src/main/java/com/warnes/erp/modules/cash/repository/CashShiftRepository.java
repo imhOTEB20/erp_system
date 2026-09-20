@@ -3,6 +3,9 @@ package com.warnes.erp.modules.cash.repository;
 import com.warnes.erp.modules.cash.entity.CashShift;
 import com.warnes.erp.modules.cash.entity.ShiftStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +14,6 @@ public interface CashShiftRepository extends JpaRepository<CashShift, Long> {
     Optional<CashShift> findByCashRegisterIdAndStatus(Long cashRegisterId, ShiftStatus status);
     // Buscar el turno abierto del usuario logueado
     Optional<CashShift> findByUserIdAndStatus(Long userId, ShiftStatus status);
+    // Busca turnos de caja abiertos desde hace más de X tiempo
+    List<CashShift> findByStatusAndOpenedAtBefore(ShiftStatus status, ZonedDateTime threshold);
 }
