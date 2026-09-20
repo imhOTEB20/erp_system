@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Reporte Kardex</title>
+    <style>
+        @page {
+            size: A4 landscape; /* Apaisado para acomodar las columnas cómodamente */
+            margin: 15mm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 9pt;
+            }
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 10pt;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+        }
+        .header h1 { margin: 0; color: #2c3e50; font-size: 18pt;}
+        .meta-info {
+            text-align: right;
+            font-size: 9pt;
+            color: #7f8c8d;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #bdc3c7;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+        }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        .positive { color: #27ae60; font-weight: bold; }
+        .negative { color: #e74c3c; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Kardex de Producto - Historial de Movimientos</h1>
+    <div class="meta-info">
+        Fecha de emisión: <span th:text="${reportDate}"></span>
+    </div>
+</div>
+
+<!-- Información del producto (tomada del primer movimiento de la lista para simplificar) -->
+<div th:if="${not #lists.isEmpty(movements)}" style="margin-bottom: 15px;">
+    <strong>Producto:</strong> <span th:text="${movements[0].productSku + ' - ' + movements[0].productName}"></span><br/>
+    <strong>Almacén consultado:</strong> <span th:text="${movements[0].warehouseName}"></span>
+</div>
+
+<table>
+    <thead>
+    <tr>
+        <th style="width: 15%;">Fecha y Hora</th>
+        <th style="width: 15%;">Operador</th>
+        <th style="width: 15%;">Tipo de Operación</th>
+        <th style="width: 25%;">Doc. Referencia</th>
+        <th style="width: 15%;">Cantidad Movida</th>
+        <th style="width: 15%;">Saldo Posterior</th>
+    </tr>
+    </thead>
+    <tbody>
+    <!-- Si no hay movimientos -->
+    <tr th:if="${#lists.isEmpty(movements)}">
+        <td colspan="6" style="padding: 20px; color: #7f8c8d;">No hay movimientos registrados para este producto.</td>
+    </tr>
+
+    <!-- Iteración sobre la lista de StockMovementResponseDTO -->
+    <tr th:each="mov : ${movements}">
+        <td th:text="${#temporals.format(mov.createdAt, 'dd/MM/yyyy HH:mm')}"></td>
+        <td th:text="${mov.userName}"></td>
+
+        <!-- Traducción visual del tipo de movimiento -->
+        <td th:switch="${mov.movementType}">
+            <span th:case="'PURCHASE'">Compra a Proveedor</span>
+            <span th:case="'SALE'">Venta de Mostrador</span>
+            <span th:case="'RETURN_IN'">Devolución (NC)</span>
+            <span th:case="'ADJUSTMENT'">Ajuste Manual</span>
+            <span th:case="'TRANSFER_IN'">Ingreso por Transferencia</span>
+            <span th:case="'TRANSFER_OUT'">Egreso por Transferencia</span>
+            <span th:case="*" th:text="${mov.movementType}"></span>
+        </td>
+
+        <td class="text-left" style="font-size: 8pt; word-break: break-all;" th:text="${mov.referenceDocument != null ? mov.referenceDocument : 'N/A'}"></td>
+
+        <!-- Formateo de cantidades numéricas -->
+        <td class="text-right" th:classappend="${mov.movementType == 'SALE' or mov.movementType == 'TRANSFER_OUT'} ? 'negative' : 'positive'"
+            th:text="${(mov.movementType == 'SALE' or mov.movementType == 'TRANSFER_OUT' ? '-' : '+') + #numbers.formatDecimal(mov.quantity, 1, 'COMMA', 2, 'POINT')}">
+        </td>
+        <td class="text-right bold" th:text="${#numbers.formatDecimal(mov.balanceAfter, 1, 'COMMA', 2, 'POINT')}"></td>
+    </tr>
+    </tbody>
+</table>
+
+</body>
+</html>

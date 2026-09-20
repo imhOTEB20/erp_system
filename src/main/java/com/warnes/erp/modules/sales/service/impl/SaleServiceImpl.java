@@ -278,4 +278,12 @@ public class SaleServiceImpl implements SaleService {
         BigDecimal multiplier = BigDecimal.ONE.add(marginPercentage.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
         return basePrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SaleResponseDTO getSaleByUuid(UUID uuid) {
+        Sale sale = saleRepository.findByUuid(uuid)
+                .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada"));
+        return saleMapper.toResponseDTO(sale);
+    }
 }

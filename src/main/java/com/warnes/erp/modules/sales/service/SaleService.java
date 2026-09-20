@@ -8,4 +8,5 @@ import java.util.UUID;
 public interface SaleService {
     SaleResponseDTO createSale(SaleCreateRequestDTO request);
     SaleResponseDTO registerPayment(UUID saleUuid, SalePaymentRequestDTO request, UUID originWarehouseUuid);
+    SaleResponseDTO getSaleByUuid(UUID uuid);
 }
