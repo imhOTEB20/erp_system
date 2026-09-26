@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.catalog.entity;
 
+import com.warnes.erp.common.AuditableEntity;
 import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import jakarta.persistence.Column;
@@ -18,7 +19,7 @@ import java.util.UUID;
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
-public class Brand extends BaseEntity implements UuidIdentifiable {
+public class Brand extends AuditableEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -29,7 +30,4 @@ public class Brand extends BaseEntity implements UuidIdentifiable {
 
     @Column(nullable = false)
     private boolean active = true;
-
-    @Column(name = "deleted_at")
-    private ZonedDateTime deletedAt;
 }

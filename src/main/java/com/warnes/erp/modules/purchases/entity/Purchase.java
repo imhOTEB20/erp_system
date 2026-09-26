@@ -1,7 +1,9 @@
 package com.warnes.erp.modules.purchases.entity;
 
+import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import com.warnes.erp.modules.inventory.entity.Warehouse;
+import com.warnes.erp.modules.security.entity.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,11 +22,7 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
-public class Purchase implements UuidIdentifiable {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Purchase extends BaseEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -54,4 +52,8 @@ public class Purchase implements UuidIdentifiable {
     // NUEVO: Relación en cascada con los impuestos aplicados
     @OneToMany(mappedBy = "purchase", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PurchaseTax> taxes = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
+    private User user;
 }

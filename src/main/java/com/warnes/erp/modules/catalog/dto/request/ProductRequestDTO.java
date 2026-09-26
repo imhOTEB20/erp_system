@@ -1,51 +1,56 @@
 package com.warnes.erp.modules.catalog.dto.request;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+@Schema(description = "Payload para la creación de un nuevo Producto/Repuesto")
 public record ProductRequestDTO(
-        @NotBlank(message = "El SKU es obligatorio")
-        @Size(max = 50)
+        @Schema(description = "Código SKU del fabricante. Si se omite, el sistema generará uno interno.")
+        @Size(max = 50, message = "El SKU no puede exceder los 50 caracteres")
         String sku,
 
+        @Schema(description = "Código de barras universal (EAN/UPC)")
         @Size(max = 64)
         String barcode,
 
+        @Schema(description = "Nombre descriptivo del repuesto")
         @NotBlank(message = "El nombre del producto es obligatorio")
-        @Size(max = 200)
         String name,
 
-        @NotNull(message = "El UUID de la categoría es obligatorio")
+        @Schema(description = "Identificador de la Categoría")
+        @NotNull(message = "La categoría es obligatoria")
         UUID categoryUuid,
 
-        @NotNull(message = "El UUID de la marca es obligatorio")
+        @Schema(description = "Identificador de la Marca")
+        @NotNull(message = "La marca es obligatoria")
         UUID brandUuid,
 
-        @NotNull(message = "Indicar si es servicio es obligatorio")
+        @Schema(description = "Identificador del Tipo de Impuesto (Ej: IVA 21%)")
+        @NotNull(message = "El tipo de impuesto es obligatorio")
+        UUID taxTypeUuid,
+
+        @Schema(description = "¿Es un servicio de taller en lugar de un bien físico?")
         Boolean service,
 
-        @NotNull(message = "Indicar si es kit es obligatorio")
+        @Schema(description = "¿Es un combo armado de varios repuestos?")
         Boolean kit,
 
-        @NotNull(message = "El precio de costo es obligatorio")
-        @DecimalMin(value = "0.0000")
+        @NotNull(message = "El costo es obligatorio")
         BigDecimal costPrice,
 
-        @NotNull(message = "El margen de ganancia es obligatorio")
-        @DecimalMin(value = "0.00")
-        BigDecimal profitMargin,
-
-        @NotNull(message = "El precio de venta es obligatorio")
-        @DecimalMin(value = "0.00")
+        @NotNull(message = "El precio final es obligatorio")
         BigDecimal salePrice,
 
-        @NotNull(message = "El porcentaje de impuesto es obligatorio")
-        @DecimalMin(value = "0.00")
-        BigDecimal taxPercentage,
-
-        @Valid
         List<ProductCrossReferenceRequestDTO> crossReferences
-) {}
+) {
+        public ProductRequestDTO {
+                if (service == null) service = false;
+                if (kit == null) kit = false;
+        }
+}

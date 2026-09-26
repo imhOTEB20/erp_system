@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.sales.entity;
 
+import com.warnes.erp.common.AuditableEntity;
 import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import jakarta.persistence.Column;
@@ -19,7 +20,7 @@ import java.util.UUID;
 @SQLRestriction("deleted_at IS NULL") // NUEVO: Filtro automático de Hibernate
 @Getter
 @Setter
-public class PriceList extends BaseEntity implements UuidIdentifiable {
+public class PriceList extends AuditableEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -31,7 +32,4 @@ public class PriceList extends BaseEntity implements UuidIdentifiable {
     @Column(name = "margin_percentage", nullable = false, precision = 6, scale = 2)
     private BigDecimal marginPercentage = BigDecimal.ZERO;
 
-    // NUEVO: Campo necesario para el Soft Delete
-    @Column(name = "deleted_at")
-    private ZonedDateTime deletedAt;
 }

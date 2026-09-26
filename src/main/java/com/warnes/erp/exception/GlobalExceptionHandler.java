@@ -139,4 +139,50 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
         return problem;
     }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(
+            org.springframework.http.converter.HttpMessageNotReadableException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+
+        ServletWebRequest servletWebRequest = (ServletWebRequest) request;
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "El cuerpo de la petición (JSON) está malformado o contiene tipos de datos incompatibles."
+        );
+        problem.setTitle("Error de Lectura de Petición");
+        problem.setType(URI.create(BASE_TYPE_URI + "bad-request"));
+        problem.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+
+        // Opcional: Agregar el mensaje técnico real solo en entornos de desarrollo
+        // problem.setProperty("debugMessage", ex.getMessage());
+
+        return new ResponseEntity<>(problem, headers, status);
+    }
+
+    @ExceptionHandler(io.jsonwebtoken.JwtException.class)
+    public ProblemDetail handleJwtException(io.jsonwebtoken.JwtException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED,
+                "El token de acceso es inválido, ha expirado o su firma no coincide."
+        );
+        problem.setTitle("Token JWT Inválido");
+        problem.setType(URI.create(BASE_TYPE_URI + "invalid-token"));
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
+
+    @ExceptionHandler(StockAlreadyInitializedException.class)
+    public ProblemDetail handleStockAlreadyInitialized(StockAlreadyInitializedException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Regla de Negocio Violada");
+        problem.setType(URI.create(BASE_TYPE_URI + "stock-unprocessable"));
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
 }

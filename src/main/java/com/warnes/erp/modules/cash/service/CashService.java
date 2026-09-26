@@ -17,4 +17,5 @@ public interface CashService {
     CashShiftResponseDTO getActiveShiftByRegister(UUID registerUuid);
     CashShiftResponseDTO registerSafeDrop(UUID shiftUuid, CashAdjustmentRequestDTO request);
     CashShiftResponseDTO registerPettyCashIn(UUID shiftUuid, CashAdjustmentRequestDTO request);
+    List<CashRegisterResponseDTO> getRegistersByWarehouse(UUID warehouseUuid);
 }

@@ -1,7 +1,9 @@
 package com.warnes.erp.modules.sales.entity;
 
+import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import com.warnes.erp.modules.cash.entity.CashShift;
+import com.warnes.erp.modules.security.entity.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,11 +22,7 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
-public class Sale implements UuidIdentifiable {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Sale extends BaseEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -34,8 +32,12 @@ public class Sale implements UuidIdentifiable {
     private String invoiceNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cash_shift_id", nullable = false)
+    @JoinColumn(name = "cash_shift_id")
     private CashShift cashShift;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
+    private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")

@@ -1,6 +1,7 @@
 package com.warnes.erp.modules.security.service.impl;
 
 import com.warnes.erp.exception.BusinessRuleException;
+import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.security.dto.request.AuthRequestDTO;
 import com.warnes.erp.modules.security.dto.response.AuthResponseDTO;
 import com.warnes.erp.modules.security.entity.User;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -43,11 +45,17 @@ public class AuthServiceImpl implements AuthService {
 
         String jwtToken = jwtService.generateToken(extraClaims, user);
 
+        Warehouse userWarehouse = user.getDefaultWarehouse();
+        UUID warehouseId = userWarehouse != null ? userWarehouse.getUuid() : null;
+        String warehouseName = userWarehouse != null ? userWarehouse.getName() : null;
+
         return new AuthResponseDTO(
                 jwtToken,
                 user.getUuid(),
                 user.getFullName(),
-                user.getRole().name()
+                user.getRole().name(),
+                warehouseId,
+                warehouseName
         );
     }
 }

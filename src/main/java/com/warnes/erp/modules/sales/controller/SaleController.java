@@ -5,6 +5,9 @@ import com.warnes.erp.modules.sales.dto.request.SaleCreateRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SalePaymentRequestDTO;
 import com.warnes.erp.modules.sales.dto.response.SaleResponseDTO;
 import com.warnes.erp.modules.sales.service.SaleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,10 +21,12 @@ import java.util.UUID;
 @RequestMapping("/api/v1/sales")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
+@Tag(name = "Ventas de Mostrador", description = "Endpoints para la creación, consulta y cobro de facturas")
 public class SaleController {
 
     private final SaleService saleService;
 
+    @Operation(summary = "Registrar nueva venta", description = "Crea una venta en estado PENDIENTE. Verifica disponibilidad pero no deduce stock físico hasta que se registre el pago.")
     @PostMapping
     public ResponseEntity<ApiResponse<SaleResponseDTO>> createSale(@Valid @RequestBody SaleCreateRequestDTO request) {
         SaleResponseDTO response = saleService.createSale(request);
@@ -29,11 +34,12 @@ public class SaleController {
                 .body(ApiResponse.success(response, "Venta creada en estado PENDIENTE. Esperando cobro."));
     }
 
+    @Operation(summary = "Registrar cobro total o parcial", description = "Aplica un pago a la factura. Si cubre el total, deduce el stock físico del almacén y completa la venta.")
     @PostMapping("/{uuid}/payments")
     public ResponseEntity<ApiResponse<SaleResponseDTO>> registerPayment(
-            @PathVariable UUID uuid,
+            @Parameter(description = "UUID de la venta a cobrar", required = true) @PathVariable UUID uuid,
             @Valid @RequestBody SalePaymentRequestDTO request,
-            @RequestParam UUID originWarehouseUuid // Requerido para deducir stock al completar el total
+            @Parameter(description = "UUID del almacén origen para deducir stock si se completa la venta", required = true) @RequestParam UUID originWarehouseUuid
     ) {
         SaleResponseDTO response = saleService.registerPayment(uuid, request, originWarehouseUuid);
 
@@ -44,8 +50,10 @@ public class SaleController {
         return ResponseEntity.ok(ApiResponse.success(response, message));
     }
 
+    @Operation(summary = "Consultar detalle de venta", description = "Retorna la cabecera, ítems, impuestos y pagos asociados a una factura específica.")
     @GetMapping("/{uuid}")
-    public ResponseEntity<ApiResponse<SaleResponseDTO>> getSale(@PathVariable UUID uuid) {
+    public ResponseEntity<ApiResponse<SaleResponseDTO>> getSale(
+            @Parameter(description = "UUID de la venta", required = true) @PathVariable UUID uuid) {
         return ResponseEntity.ok(ApiResponse.success(saleService.getSaleByUuid(uuid)));
     }
 }

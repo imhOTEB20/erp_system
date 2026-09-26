@@ -56,50 +56,73 @@ public class SaleServiceImpl implements SaleService {
     private final CustomerLedgerService customerLedgerService;
 
     @Override
-    @Transactional
+    @Transactional // Garantiza ACID en la facturación y la validación de inventario
     public SaleResponseDTO createSale(SaleCreateRequestDTO request) {
+
         if (saleRepository.existsByInvoiceNumberIgnoreCase(request.invoiceNumber())) {
-            throw new BusinessRuleException("El número de factura ya existe");
+            throw new BusinessRuleException("El número de factura ya existe: " + request.invoiceNumber());
         }
 
+        // 1. Trazabilidad de Auditoría (El "Fantasma")
+        // Obtenemos al usuario autenticado desde el SecurityContext de Spring (Token JWT)
+        // Nunca confiamos en un ID enviado desde el frontend
         User currentUser = getCurrentAuthenticatedUser();
-        CashShift activeShift = getActiveCashShift(currentUser);
-        Warehouse originWarehouse = getWarehouse(request.originWarehouseUuid());
 
-        Customer customer = null;
+        Sale sale = new Sale();
+        sale.setInvoiceNumber(request.invoiceNumber());
+        sale.setUser(currentUser); // Firma inmutable del responsable de la operación
+        sale.setStatus(SaleStatus.PENDING_PAYMENT); // Reserva lógica, espera registro de pago
+
+        // 2. Control B2B vs POS
+        if (request.isB2B()) {
+            if (request.customerUuid() == null) {
+                throw new BusinessRuleException("Las ventas B2B por Cuenta Corriente exigen un cliente registrado.");
+            }
+            // Al ser operación administrativa/mayorista, se desvincula de las cajas físicas
+            sale.setCashShift(null);
+        } else {
+            // Operación de mostrador minorista. Obliga a que el cajero tenga su turno activo.
+            CashShift activeShift = getActiveCashShift(currentUser);
+            sale.setCashShift(activeShift);
+        }
+
+        // 3. Resolución de Lista de Precios y Cliente
         BigDecimal customerMargin = BigDecimal.ZERO;
         if (request.customerUuid() != null) {
-            customer = customerRepository.findByUuid(request.customerUuid())
+            Customer customer = customerRepository.findByUuid(request.customerUuid())
                     .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
+
+            sale.setCustomer(customer);
+
             if (customer.getPriceList() != null) {
                 customerMargin = customer.getPriceList().getMarginPercentage();
             }
         }
 
-        Sale sale = new Sale();
-        sale.setInvoiceNumber(request.invoiceNumber());
-        sale.setCashShift(activeShift);
-        sale.setCustomer(customer);
-        sale.setStatus(SaleStatus.PENDING_PAYMENT); // La venta nace pendiente
-
+        // 4. Bloqueo PESSIMISTIC_WRITE de Inventario e Inserción de Items
+        Warehouse originWarehouse = getWarehouse(request.originWarehouseUuid());
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (SaleItemRequestDTO itemDto : request.items()) {
             Product product = productRepository.findByUuid(itemDto.productUuid())
                     .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
-            // Solo verificamos disponibilidad de forma optimista, el bloqueo fuerte ocurre al pagar
-            Stock stock = stockRepository.findByProductIdAndWarehouseId(product.getId(), originWarehouse.getId())
-                    .orElseThrow(() -> new BusinessRuleException("Stock no inicializado para: " + product.getSku()));
+            // Bloqueo a nivel de base de datos para evitar Race Conditions (Double-Spend) de Stock
+            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), originWarehouse.getId())
+                    .orElseThrow(() -> new BusinessRuleException("Stock no inicializado en el almacén origen para: " + product.getSku()));
 
-            // Corrección: Usar getQuantity() y comparar con BigDecimal
+            // La deducción final ocurre al pagar, pero validamos la reserva temprana
             if (stock.getQuantity().compareTo(itemDto.quantity()) < 0) {
-                throw new BusinessRuleException("Stock insuficiente previo de " + product.getSku());
+                throw new BusinessRuleException(
+                        "Stock insuficiente previo de " + product.getSku() + ". Disponible: " + stock.getQuantity()
+                );
             }
 
-            BigDecimal finalUnitPrice = calculateFinalPrice(product.getSalePrice(), customerMargin);
-            BigDecimal subtotal = finalUnitPrice.multiply(itemDto.quantity());
-            totalAmount = totalAmount.add(subtotal);
+            // Cálculo dinámico de márgenes y descuentos redondeado a 2 decimales para AFIP
+            BigDecimal basePrice = product.getSalePrice();
+            BigDecimal multiplier = BigDecimal.ONE.add(customerMargin.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
+            BigDecimal finalUnitPrice = basePrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal subtotal = finalUnitPrice.multiply(itemDto.quantity()).setScale(2, RoundingMode.HALF_UP);
 
             SaleItem saleItem = new SaleItem();
             saleItem.setSale(sale);
@@ -107,11 +130,17 @@ public class SaleServiceImpl implements SaleService {
             saleItem.setQuantity(itemDto.quantity());
             saleItem.setUnitPrice(finalUnitPrice);
             saleItem.setSubtotal(subtotal);
+
             sale.getItems().add(saleItem);
+            totalAmount = totalAmount.add(subtotal);
         }
 
         sale.setTotalAmount(totalAmount);
-        return saleMapper.toResponseDTO(saleRepository.save(sale));
+
+        // Guardado en cascada de cabecera y detalle
+        Sale savedSale = saleRepository.save(sale);
+
+        return saleMapper.toResponseDTO(savedSale);
     }
 
     @Override

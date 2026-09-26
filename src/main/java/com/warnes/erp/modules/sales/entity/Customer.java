@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.sales.entity;
 
+import com.warnes.erp.common.AuditableEntity;
 import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import jakarta.persistence.Column;
@@ -23,7 +24,7 @@ import java.util.UUID;
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
-public class Customer extends BaseEntity implements UuidIdentifiable {
+public class Customer extends AuditableEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -41,9 +42,6 @@ public class Customer extends BaseEntity implements UuidIdentifiable {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "price_list_id")
     private PriceList priceList;
-
-    @Column(name = "deleted_at")
-    private ZonedDateTime deletedAt;
 
     @Column(name = "credit_limit", nullable = false, precision = 14, scale = 2)
     private BigDecimal creditLimit = BigDecimal.ZERO;

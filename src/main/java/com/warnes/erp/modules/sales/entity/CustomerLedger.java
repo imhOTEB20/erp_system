@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.sales.entity;
 
+import com.warnes.erp.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -25,11 +26,7 @@ import java.time.ZonedDateTime;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
-public class CustomerLedger {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id; // ID interno, nunca se expone
+public class CustomerLedger extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)

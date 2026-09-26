@@ -2,6 +2,7 @@ package com.warnes.erp.modules.inventory.entity;
 
 import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
+import com.warnes.erp.modules.security.entity.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -19,11 +20,7 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
-public class Transfer implements UuidIdentifiable {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Transfer extends BaseEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -50,4 +47,8 @@ public class Transfer implements UuidIdentifiable {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private ZonedDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
+    private User user;
 }

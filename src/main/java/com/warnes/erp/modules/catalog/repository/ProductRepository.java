@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByUuid(UUID uuid);
     boolean existsBySkuIgnoreCase(String sku);
+    boolean existsByUuid(UUID uuid);
 
     /**
      * Motor de búsqueda de mostrador: Busca el código exacto, ya sea

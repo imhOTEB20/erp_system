@@ -12,11 +12,7 @@ import java.math.BigDecimal;
 @Table(name = "transfer_items")
 @Getter
 @Setter
-public class TransferItem {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class TransferItem extends BaseEntity{
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "transfer_id", nullable = false)

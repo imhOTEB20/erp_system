@@ -5,6 +5,8 @@ import com.warnes.erp.modules.inventory.service.StockService;
 import com.warnes.erp.modules.reporting.service.PdfService;
 import com.warnes.erp.modules.sales.dto.response.SaleResponseDTO;
 import com.warnes.erp.modules.sales.service.SaleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,16 +25,17 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
+@Tag(name = "Reportes y Documentos", description = "Generación asíncrona de archivos PDF (Facturas, Tickets y Kardex)")
 public class ReportController {
 
     private final PdfService pdfService;
     private final SaleService saleService;
     private final StockService stockService;
 
+    @Operation(summary = "Descargar Factura A4", description = "Retorna el array de bytes de un archivo PDF estructurado para impresión tamaño carta/A4.")
     @GetMapping("/sales/{uuid}/invoice")
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
     public ResponseEntity<byte[]> downloadInvoiceA4(@PathVariable UUID uuid) {
-        // Reutilizamos el DTO existente que armaste en SaleServiceImpl
         SaleResponseDTO sale = saleService.getSaleByUuid(uuid);
 
         Map<String, Object> data = new HashMap<>();
@@ -41,10 +44,10 @@ public class ReportController {
         data.put("printDate", ZonedDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
 
         byte[] pdfBytes = pdfService.generatePdfFromHtml("invoice-a4", data);
-
         return buildPdfResponse(pdfBytes, "Factura_" + sale.invoiceNumber() + ".pdf");
     }
 
+    @Operation(summary = "Descargar Ticket Térmico", description = "Retorna el array de bytes de un archivo PDF optimizado para impresora térmica de 80mm.")
     @GetMapping("/sales/{uuid}/ticket")
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
     public ResponseEntity<byte[]> downloadTicket80mm(@PathVariable UUID uuid) {
@@ -54,10 +57,10 @@ public class ReportController {
         data.put("sale", sale);
 
         byte[] pdfBytes = pdfService.generatePdfFromHtml("ticket-80mm", data);
-
         return buildPdfResponse(pdfBytes, "Ticket_" + sale.invoiceNumber() + ".pdf");
     }
 
+    @Operation(summary = "Descargar Reporte Kardex", description = "Retorna un reporte tabular en PDF con todo el historial de movimientos de un producto.")
     @GetMapping("/inventory/{productUuid}/kardex")
     @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")
     public ResponseEntity<byte[]> downloadKardexReport(@PathVariable UUID productUuid) {
@@ -68,19 +71,14 @@ public class ReportController {
         data.put("reportDate", ZonedDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
 
         byte[] pdfBytes = pdfService.generatePdfFromHtml("kardex-report", data);
-
         return buildPdfResponse(pdfBytes, "Kardex_Producto.pdf");
     }
 
-    /**
-     * Utilidad para inyectar los headers HTTP correctos para la descarga de PDFs
-     */
     private ResponseEntity<byte[]> buildPdfResponse(byte[] pdfBytes, String filename) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData("attachment", filename);
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 }

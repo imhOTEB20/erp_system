@@ -1,6 +1,7 @@
 package com.warnes.erp.modules.catalog.service;
 
 import com.warnes.erp.modules.catalog.dto.request.ProductRequestDTO;
+import com.warnes.erp.modules.catalog.dto.request.ProductUpdateRequestDTO;
 import com.warnes.erp.modules.catalog.dto.response.BulkImportResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductResponseDTO;
 import org.springframework.web.multipart.MultipartFile;
@@ -10,7 +11,7 @@ import java.util.UUID;
 
 public interface ProductService {
     ProductResponseDTO createProduct(ProductRequestDTO request);
-    ProductResponseDTO updateProduct(UUID uuid, ProductRequestDTO request);
+    ProductResponseDTO updateProduct(UUID uuid, ProductUpdateRequestDTO request);
     ProductResponseDTO getProductByUuid(UUID uuid);
     List<ProductResponseDTO> getAllProducts();
     List<ProductResponseDTO> searchByCode(String query); // Renombrado para coincidir con tu Controller

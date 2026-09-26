@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.catalog.entity;
 
+import com.warnes.erp.common.AuditableEntity;
 import com.warnes.erp.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,7 +19,7 @@ import java.time.ZonedDateTime; // <-- IMPORTANTE
 @SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
-public class ProductCrossReference extends BaseEntity {
+public class ProductCrossReference extends AuditableEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
@@ -30,7 +31,4 @@ public class ProductCrossReference extends BaseEntity {
     @Column(name = "external_sku", nullable = false, length = 100)
     private String externalSku;
 
-    // <-- CAMBIO APLICADO: Agregamos el campo para el Soft Delete
-    @Column(name = "deleted_at")
-    private ZonedDateTime deletedAt;
 }

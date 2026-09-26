@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -70,6 +71,7 @@ public class TaxTypeServiceImpl implements TaxTypeService {
 
         // Al no existir columna 'deleted_at', realizamos un Soft Delete lógico mediante el estado.
         taxType.setActive(false);
+        taxType.setDeletedAt(ZonedDateTime.now());
         taxTypeRepository.save(taxType);
     }
 }

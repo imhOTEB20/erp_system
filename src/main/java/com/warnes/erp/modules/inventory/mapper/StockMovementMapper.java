@@ -14,4 +14,5 @@ public interface StockMovementMapper {
     @Mapping(target = "warehouseName", source = "warehouse.name")
     @Mapping(target = "userName", source = "user.fullName") // O user.username dependiendo de qué quieras mostrar
     StockMovementResponseDTO toResponseDTO(StockMovement entity);
+
 }

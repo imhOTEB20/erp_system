@@ -18,11 +18,7 @@ import java.util.UUID;
 @Table(name = "cash_shifts")
 @Getter
 @Setter
-public class CashShift implements UuidIdentifiable {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class CashShift extends BaseEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)

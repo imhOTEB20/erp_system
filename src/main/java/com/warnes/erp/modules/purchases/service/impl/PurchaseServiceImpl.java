@@ -123,6 +123,7 @@ public class PurchaseServiceImpl implements PurchaseService {
                 purchaseTax.setTaxAmount(taxDto.taxAmount());
 
                 purchase.getTaxes().add(purchaseTax);
+                purchase.setUser(currentUser);
             }
         }
 

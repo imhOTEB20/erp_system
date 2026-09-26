@@ -12,11 +12,7 @@ import java.math.BigDecimal;
 @Table(name = "sale_taxes")
 @Getter
 @Setter
-public class SaleTax {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class SaleTax extends BaseEntity{
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sale_id", nullable = false)

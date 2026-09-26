@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.inventory.entity;
 
+import com.warnes.erp.common.AuditableEntity;
 import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import jakarta.persistence.Column;
@@ -17,10 +18,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "warehouses")
-@SQLRestriction("deleted_at IS NULL")
+//@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
-public class Warehouse extends BaseEntity implements UuidIdentifiable {
+public class Warehouse extends AuditableEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -37,11 +38,9 @@ public class Warehouse extends BaseEntity implements UuidIdentifiable {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private WarehouseType type;
+    private WarehouseType type = WarehouseType.STORE;
 
     @Column(nullable = false)
     private boolean active = true;
 
-    @Column(name = "deleted_at")
-    private ZonedDateTime deletedAt;
 }

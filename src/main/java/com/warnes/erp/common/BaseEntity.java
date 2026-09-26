@@ -9,10 +9,6 @@ import lombok.Setter;
 
 import java.io.Serializable;
 
-/**
- * Entidad base que provee el identificador primario (BIGINT).
- * Todas las entidades del sistema deben heredar de esta clase o de sus hijas.
- */
 @Getter
 @Setter
 @MappedSuperclass

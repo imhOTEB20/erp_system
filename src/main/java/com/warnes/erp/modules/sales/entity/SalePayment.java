@@ -39,4 +39,8 @@ public class SalePayment extends BaseEntity implements UuidIdentifiable {
 
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal amount;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private ZonedDateTime createdAt;
 }

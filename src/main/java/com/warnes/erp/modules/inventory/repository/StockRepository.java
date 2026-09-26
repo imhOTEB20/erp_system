@@ -7,7 +7,9 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
@@ -17,4 +19,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     Optional<Stock> findByProductAndWarehouseForUpdate(@Param("productId") Long productId, @Param("warehouseId") Long warehouseId);
 
     Optional<Stock> findByProductIdAndWarehouseId(Long productId, Long warehouseId);
+
+    // Traemos el stock y hacemos JOIN FETCH del producto para mapear el DTO de forma óptima
+    @Query("SELECT s FROM Stock s JOIN FETCH s.product WHERE s.warehouse.uuid = :warehouseUuid")
+    List<Stock> findAllByWarehouseUuid(@Param("warehouseUuid") UUID warehouseUuid);
 }

@@ -3,20 +3,16 @@ package com.warnes.erp.modules.catalog.service.impl;
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ResourceNotFoundException;
 import com.warnes.erp.modules.catalog.dto.request.ProductRequestDTO;
+import com.warnes.erp.modules.catalog.dto.request.ProductUpdateRequestDTO;
 import com.warnes.erp.modules.catalog.dto.response.BulkImportResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductResponseDTO;
-import com.warnes.erp.modules.catalog.entity.Brand;
-import com.warnes.erp.modules.catalog.entity.Category;
-import com.warnes.erp.modules.catalog.entity.Product;
-import com.warnes.erp.modules.catalog.entity.ProductCrossReference;
+import com.warnes.erp.modules.catalog.entity.*;
 import com.warnes.erp.modules.catalog.mapper.ProductMapper;
-import com.warnes.erp.modules.catalog.repository.BrandRepository;
-import com.warnes.erp.modules.catalog.repository.CategoryRepository;
-import com.warnes.erp.modules.catalog.repository.ProductCrossReferenceRepository;
-import com.warnes.erp.modules.catalog.repository.ProductRepository;
+import com.warnes.erp.modules.catalog.repository.*;
 import com.warnes.erp.modules.catalog.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,48 +34,69 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
+    private final TaxTypeRepository taxTypeRepository;
     private final ProductMapper productMapper;
     private final ProductCrossReferenceRepository crossReferenceRepository;
 
     @Override
     @Transactional
     public ProductResponseDTO createProduct(ProductRequestDTO request) {
-        if (productRepository.existsBySkuIgnoreCase(request.sku())) {
+        String finalSku = request.sku();
+
+        // REGLA DE NEGOCIO: Generación de SKU Interno si viene vacío
+        if (finalSku == null || finalSku.isBlank()) {
+            finalSku = "REP-" + RandomStringUtils.randomAlphanumeric(8).toUpperCase();
+        } else if (productRepository.existsBySkuIgnoreCase(finalSku)) {
             throw new BusinessRuleException("El SKU ingresado ya pertenece a otro producto activo.");
         }
 
         Product product = productMapper.toEntity(request);
-        assignCategoryAndBrand(product, request.categoryUuid(), request.brandUuid());
+        product.setSku(finalSku); // Asignamos el SKU definitivo
+
+        assignMasterData(product, request.categoryUuid(), request.brandUuid(), request.taxTypeUuid());
         handleCrossReferences(product, request);
 
         return productMapper.toResponseDTO(productRepository.save(product));
     }
 
+    // Método centralizado para poblar las 3 relaciones maestras
+    private void assignMasterData(Product product, UUID categoryUuid, UUID brandUuid, UUID taxTypeUuid) {
+        Category category = categoryRepository.findByUuid(categoryUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("La categoría especificada no existe."));
+        Brand brand = brandRepository.findByUuid(brandUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("La marca especificada no existe."));
+        TaxType taxType = taxTypeRepository.findByUuid(taxTypeUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("El tipo de impuesto especificado no existe."));
+
+        product.setCategory(category);
+        product.setBrand(brand);
+        product.setTaxType(taxType);
+    }
+
     @Override
     @Transactional
-    public ProductResponseDTO updateProduct(UUID uuid, ProductRequestDTO request) {
+    public ProductResponseDTO updateProduct(UUID uuid, ProductUpdateRequestDTO request) {
         Product product = productRepository.findByUuid(uuid)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado."));
 
-        if (!product.getSku().equalsIgnoreCase(request.sku()) &&
-                productRepository.existsBySkuIgnoreCase(request.sku())) {
-            throw new BusinessRuleException("El nuevo SKU ingresado ya pertenece a otro producto activo.");
+        // 1. MapStruct actualiza los tipos simples (String, BigDecimal, Boolean) omitiendo los nulos
+        productMapper.updateEntityFromDto(request, product);
+
+        // 2. Lógica Manual Condicional para Claves Foráneas
+        if (request.categoryUuid() != null) {
+            product.setCategory(categoryRepository.findByUuid(request.categoryUuid())
+                    .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada.")));
         }
 
-        product.setSku(request.sku());
-        product.setBarcode(request.barcode());
-        product.setName(request.name());
-        product.setService(request.service());
-        product.setKit(request.kit());
-        product.setCostPrice(request.costPrice());
-        product.setProfitMargin(request.profitMargin());
-        product.setSalePrice(request.salePrice());
-        product.setTaxPercentage(request.taxPercentage());
+        if (request.brandUuid() != null) {
+            product.setBrand(brandRepository.findByUuid(request.brandUuid())
+                    .orElseThrow(() -> new ResourceNotFoundException("Marca no encontrada.")));
+        }
 
-        assignCategoryAndBrand(product, request.categoryUuid(), request.brandUuid());
-
-        product.getCrossReferences().clear();
-        handleCrossReferences(product, request);
+        if (request.taxTypeUuid() != null) {
+            product.setTaxType(taxTypeRepository.findByUuid(request.taxTypeUuid())
+                    .orElseThrow(() -> new ResourceNotFoundException("Tipo de impuesto no encontrado.")));
+        }
 
         return productMapper.toResponseDTO(productRepository.save(product));
     }

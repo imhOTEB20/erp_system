@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.inventory.entity;
 
+import com.warnes.erp.common.BaseEntity;
 import com.warnes.erp.common.UuidIdentifiable;
 import com.warnes.erp.modules.catalog.entity.Product;
 import com.warnes.erp.modules.security.entity.User;
@@ -19,11 +20,7 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
-public class StockMovement implements UuidIdentifiable {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class StockMovement extends BaseEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)

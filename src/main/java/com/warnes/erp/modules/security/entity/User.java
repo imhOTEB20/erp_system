@@ -1,12 +1,9 @@
 package com.warnes.erp.modules.security.entity;
 
-import com.warnes.erp.common.BaseEntity;
+import com.warnes.erp.common.AuditableEntity;
 import com.warnes.erp.common.UuidIdentifiable;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
+import com.warnes.erp.modules.inventory.entity.Warehouse;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.SQLRestriction;
@@ -22,10 +19,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users")
-@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
-public class User extends BaseEntity implements UuidIdentifiable, UserDetails {
+@SQLRestriction("deleted_at IS NULL")
+public class User extends AuditableEntity implements UuidIdentifiable, UserDetails {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)
@@ -47,8 +44,10 @@ public class User extends BaseEntity implements UuidIdentifiable, UserDetails {
     @Column(nullable = false)
     private boolean active = true;
 
-    @Column(name = "deleted_at")
-    private ZonedDateTime deletedAt;
+    // NUEVO: Sucursal Base
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "default_warehouse_id")
+    private Warehouse defaultWarehouse = null;
 
     // --- Implementación de UserDetails (Spring Security) ---
 

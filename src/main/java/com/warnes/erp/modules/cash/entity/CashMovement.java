@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.cash.entity;
 
+import com.warnes.erp.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -14,11 +15,7 @@ import java.time.ZonedDateTime;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
-public class CashMovement{
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class CashMovement extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cash_shift_id", nullable = false)

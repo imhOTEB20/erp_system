@@ -111,6 +111,13 @@
 			<artifactId>flying-saucer-pdf-openpdf</artifactId>
 			<version>9.1.22</version>
 		</dependency>
+
+		<!-- Documentación OpenAPI 3 y Swagger UI -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.5.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>

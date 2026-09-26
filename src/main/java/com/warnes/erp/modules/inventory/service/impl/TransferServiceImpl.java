@@ -13,6 +13,7 @@ import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
 import com.warnes.erp.modules.inventory.repository.TransferRepository;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
+import com.warnes.erp.modules.inventory.service.StockService;
 import com.warnes.erp.modules.inventory.service.TransferService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
@@ -22,7 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,59 +40,103 @@ public class TransferServiceImpl implements TransferService {
     private final UserRepository userRepository;
     private final TransferMapper transferMapper;
 
+    private final StockServiceImpl stockService;
+
     @Override
     @Transactional
     public TransferResponseDTO createTransfer(TransferCreateRequestDTO request) {
+
+        // 1. Validar que origen y destino no sean el mismo
         if (request.originWarehouseUuid().equals(request.targetWarehouseUuid())) {
-            throw new BusinessRuleException("El almacén de origen y destino no pueden ser el mismo");
-        }
-        if (transferRepository.existsByTrackingCodeIgnoreCase(request.trackingCode())) {
-            throw new BusinessRuleException("El código de seguimiento ya existe");
+            throw new BusinessRuleException("El almacén de origen y destino no pueden ser el mismo.");
         }
 
-        Warehouse origin = findWarehouseByUuid(request.originWarehouseUuid());
-        Warehouse target = findWarehouseByUuid(request.targetWarehouseUuid());
+        Warehouse origin = warehouseRepository.findByUuid(request.originWarehouseUuid())
+                .orElseThrow(() -> new ResourceNotFoundException("Almacén de origen no encontrado."));
+
+        Warehouse target = warehouseRepository.findByUuid(request.targetWarehouseUuid())
+                .orElseThrow(() -> new ResourceNotFoundException("Almacén de destino no encontrado."));
+
         User currentUser = getCurrentAuthenticatedUser();
 
+        // 2. Crear la entidad principal con generación de código
         Transfer transfer = new Transfer();
-        transfer.setTrackingCode(request.trackingCode());
+        transfer.setTrackingCode(generateUniqueTrackingCode());
         transfer.setOriginWarehouse(origin);
         transfer.setTargetWarehouse(target);
+        transfer.setUser(currentUser);
         transfer.setStatus(TransferStatus.PENDING);
+        transfer.setItems(new ArrayList<>());
 
-        for (TransferItemRequestDTO itemDto : request.items()) {
+        // 3. Procesar ítems y descontar stock del almacén origen
+        request.items().forEach(itemDto -> {
             Product product = productRepository.findByUuid(itemDto.productUuid())
-                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + itemDto.productUuid()));
 
-            // Bloqueo pesimista en origen para garantizar stock disponible
+            // Bloqueo pesimista (ForUpdate) en BD para evitar ventas simultáneas que rompan el stock
             Stock originStock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), origin.getId())
-                    .orElseThrow(() -> new BusinessRuleException("No hay stock registrado del producto en el almacén de origen"));
+                    .orElseThrow(() -> new BusinessRuleException("No hay stock registrado del producto en el almacén de origen."));
 
             if (originStock.getQuantity().compareTo(itemDto.quantity()) < 0) {
-                throw new BusinessRuleException("Stock insuficiente para " + product.getSku() + ". Disponible: " + originStock.getQuantity());
+                throw new BusinessRuleException("Stock insuficiente en origen para el producto: " + product.getSku());
             }
 
-            // Descontamos stock de origen
-            BigDecimal newBalance = originStock.getQuantity().subtract(itemDto.quantity());
-            originStock.setQuantity(newBalance);
+            // Descontar inventario (Reserva de la transferencia)
+            originStock.setQuantity(originStock.getQuantity().subtract(itemDto.quantity()));
             stockRepository.save(originStock);
 
+            // Registrar movimiento en el Kardex (Salida por Transferencia)
+            // Llama a tu método interno que inserta en stock_movements
+            stockService.recordKardexMovement(product, origin, currentUser, itemDto.quantity(),
+                    originStock.getQuantity(), MovementType.TRANSFER_OUT, transfer.getUuid());
+
+            // Armar ítem
             TransferItem transferItem = new TransferItem();
             transferItem.setTransfer(transfer);
             transferItem.setProduct(product);
             transferItem.setQuantity(itemDto.quantity());
+
             transfer.getItems().add(transferItem);
+        });
 
-            recordKardexMovement(product, origin, currentUser, itemDto.quantity(), newBalance, MovementType.TRANSFER_OUT, transfer.getUuid());
-        }
+        Transfer savedTransfer = transferRepository.save(transfer);
 
-        return transferMapper.toResponseDTO(transferRepository.save(transfer));
+        return transferMapper.toResponseDTO(savedTransfer);
+    }
+
+    /**
+     * Genera un código único alfanumérico. Utiliza un do-while para garantizar
+     * a nivel de BD que no haya colisiones antes de intentar insertar.
+     */
+    private String generateUniqueTrackingCode() {
+        String code;
+        do {
+            // Genera un código formato: TRX-A1B2C3D4
+            code = "TRX-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        } while (transferRepository.existsByTrackingCodeIgnoreCase(code));
+        return code;
     }
 
     @Override
     @Transactional(readOnly = true)
     public TransferResponseDTO getTransferByUuid(UUID uuid) {
         return transferMapper.toResponseDTO(findTransferByUuid(uuid));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TransferResponseDTO getTransferByTrackingCode(String trackingCode) {
+        Transfer transfer = transferRepository.findByTrackingCode(trackingCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Transferencia no encontrada"));
+        return transferMapper.toResponseDTO(transfer);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TransferResponseDTO> getAll() {
+        return transferRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(transferMapper::toResponseDTO)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -145,11 +193,6 @@ public class TransferServiceImpl implements TransferService {
     private Transfer findTransferByUuid(UUID uuid) {
         return transferRepository.findByUuid(uuid)
                 .orElseThrow(() -> new ResourceNotFoundException("Transferencia no encontrada"));
-    }
-
-    private Warehouse findWarehouseByUuid(UUID uuid) {
-        return warehouseRepository.findByUuid(uuid)
-                .orElseThrow(() -> new ResourceNotFoundException("Almacén no encontrado"));
     }
 
     private void validateStatusForUpdate(Transfer transfer, TransferStatus expectedStatus) {

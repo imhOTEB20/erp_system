@@ -3,6 +3,8 @@ package com.warnes.erp.modules.inventory.service.impl;
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ResourceNotFoundException;
 import com.warnes.erp.modules.inventory.dto.request.WarehouseRequestDTO;
+import com.warnes.erp.modules.inventory.dto.request.WarehouseUpdateRequestDTO;
+import com.warnes.erp.modules.inventory.dto.response.WarehouseAuditResponseDTO;
 import com.warnes.erp.modules.inventory.dto.response.WarehouseResponseDTO;
 import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.inventory.mapper.WarehouseMapper;
@@ -45,25 +47,46 @@ public class WarehouseServiceImpl implements WarehouseService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<WarehouseResponseDTO> getAll() {
+        return warehouseRepository.findAllByOrderByName().stream()
+                .filter(warehouse -> {
+                    return warehouse.getDeletedAt() == null;
+                })
+                .map(warehouseMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<WarehouseResponseDTO> getAllActiveWarehouses() {
-        return warehouseRepository.findAll().stream()
-                .filter(Warehouse::isActive)
+        return warehouseRepository.findByActiveTrue().stream()
                 .map(warehouseMapper::toResponseDTO)
                 .toList();
     }
 
     @Override
     @Transactional
-    public WarehouseResponseDTO updateWarehouse(UUID uuid, WarehouseRequestDTO request) {
+    public WarehouseResponseDTO updateWarehouse(UUID uuid, WarehouseUpdateRequestDTO request) {
         Warehouse warehouse = findEntityByUuid(uuid);
 
-        if (!warehouse.getCode().equalsIgnoreCase(request.code()) &&
+        // Validación de unicidad solo si el cliente decidió enviar un nuevo código
+        if (request.code() != null && !warehouse.getCode().equalsIgnoreCase(request.code()) &&
                 warehouseRepository.existsByCodeIgnoreCase(request.code())) {
             throw new BusinessRuleException("El nuevo código de almacén ya está en uso");
         }
 
         warehouseMapper.updateEntityFromDto(request, warehouse);
         return warehouseMapper.toResponseDTO(warehouseRepository.save(warehouse));
+    }
+
+    @Override
+    @Transactional
+    public Boolean toggleAvailability(UUID uuid) {
+        Warehouse warehouse = findEntityByUuid(uuid);
+        warehouse.setActive(!warehouse.isActive());
+
+        warehouseRepository.save(warehouse);
+        return warehouse.isActive();
     }
 
     @Override
@@ -78,5 +101,36 @@ public class WarehouseServiceImpl implements WarehouseService {
     private Warehouse findEntityByUuid(UUID uuid) {
         return warehouseRepository.findByUuid(uuid)
                 .orElseThrow(() -> new ResourceNotFoundException("Almacén no encontrado"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<WarehouseAuditResponseDTO> getDeletedWarehouses() {
+        return warehouseRepository.findAllDeletedWarehouses().stream()
+                .map(warehouseMapper::toAuditResponseDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public WarehouseAuditResponseDTO restoreWarehouse(UUID uuid) {
+        // 1. Buscamos ignorando el filtro de soft-delete
+        Warehouse warehouse = warehouseRepository.findAnyWarehouseByUuidIncludingDeleted(uuid)
+                .orElseThrow(() -> new ResourceNotFoundException("Almacén no encontrado en los registros históricos"));
+
+        // 2. Regla de Negocio: No restaurar algo que ya está activo
+        if (warehouse.getDeletedAt() == null) {
+            throw new BusinessRuleException("El almacén ya se encuentra activo en el sistema");
+        }
+
+        // 3. Ejecutamos el UPDATE nativo para evadir el @SQLRestriction
+        warehouseRepository.restoreWarehouseByUuid(uuid);
+
+        // 4. Actualizamos la entidad en memoria para devolver el DTO limpio al frontend
+        warehouse.setDeletedAt(null);
+        warehouse.setActive(true);
+        warehouse.setUpdatedAt(ZonedDateTime.now());
+
+        return warehouseMapper.toAuditResponseDTO(warehouse);
     }
 }

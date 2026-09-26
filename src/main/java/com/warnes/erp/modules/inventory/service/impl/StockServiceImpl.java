@@ -2,14 +2,18 @@ package com.warnes.erp.modules.inventory.service.impl;
 
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ResourceNotFoundException;
+import com.warnes.erp.exception.StockAlreadyInitializedException;
 import com.warnes.erp.modules.catalog.entity.Product;
 import com.warnes.erp.modules.catalog.repository.ProductRepository;
+import com.warnes.erp.modules.inventory.dto.request.InitialStockRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.StockAdjustmentRequestDTO;
+import com.warnes.erp.modules.inventory.dto.response.ProductStockResponseDTO;
 import com.warnes.erp.modules.inventory.dto.response.StockMovementResponseDTO;
 import com.warnes.erp.modules.inventory.entity.MovementType;
 import com.warnes.erp.modules.inventory.entity.Stock;
 import com.warnes.erp.modules.inventory.entity.StockMovement;
 import com.warnes.erp.modules.inventory.entity.Warehouse;
+import com.warnes.erp.modules.inventory.mapper.StockMapper;
 import com.warnes.erp.modules.inventory.mapper.StockMovementMapper;
 import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
@@ -18,12 +22,14 @@ import com.warnes.erp.modules.inventory.service.StockService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.coyote.BadRequestException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -35,7 +41,9 @@ public class StockServiceImpl implements StockService {
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
+
     private final StockMovementMapper stockMovementMapper;
+    private final StockMapper stockMapper;
 
     @Override
     @Transactional
@@ -74,7 +82,7 @@ public class StockServiceImpl implements StockService {
         }
     }
 
-    private void recordKardexMovement(Product product, Warehouse warehouse, User user, BigDecimal quantity, BigDecimal balanceAfter, MovementType type, UUID referenceDocument) {
+    public void recordKardexMovement(Product product, Warehouse warehouse, User user, BigDecimal quantity, BigDecimal balanceAfter, MovementType type, UUID referenceDocument) {
         StockMovement movement = new StockMovement();
         movement.setProduct(product);
         movement.setWarehouse(warehouse);
@@ -104,13 +112,59 @@ public class StockServiceImpl implements StockService {
     @Override
     @Transactional(readOnly = true)
     public List<StockMovementResponseDTO> getProductKardex(UUID productUuid) {
-        if (!productRepository.findByUuid(productUuid).isPresent()) {
+        if (productRepository.findByUuid(productUuid).isEmpty()) {
             throw new ResourceNotFoundException("Producto no encontrado");
         }
 
-        return stockMovementRepository.findByProductUuidOrderByCreatedAtDesc(productUuid)
+        return stockMovementRepository.getKardexByProductUuidBypassingSoftDeletes(productUuid)
                 .stream()
                 .map(stockMovementMapper::toResponseDTO)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true) // Importante: readOnly para optimizar consultas
+    public List<ProductStockResponseDTO> getProductsByWarehouse(UUID warehouseUuid) {
+
+        Warehouse warehouse = warehouseRepository.findByUuid(warehouseUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("Almacén no encontrado"));
+
+        // 2. Obtener stocks optimizados y mapear a DTO
+        return stockRepository.findAllByWarehouseUuid(warehouse.getUuid()).stream()
+                .map(stockMapper::toProductStockResponseDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ProductStockResponseDTO initializerStock(InitialStockRequestDTO request) {
+        Product product = productRepository.findByUuid(request.productUuid())
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
+
+        Warehouse warehouse = warehouseRepository.findByUuid(request.warehouseUuid())
+                .orElseThrow(() -> new ResourceNotFoundException("Almacén no encontrado"));
+
+        Optional<Stock> oldStock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), warehouse.getId());
+
+        if (oldStock.isPresent()) {
+            throw new StockAlreadyInitializedException(
+                    "El stock en el almacén seleccionado para el producto ya está inicializado."
+            );
+        }
+
+        User currentUser = getCurrentAuthenticatedUser();
+
+        Stock newStock = new Stock();
+        newStock.setProduct(product);
+        newStock.setWarehouse(warehouse);
+        newStock.setQuantity(request.quantity());
+        newStock.setMinStock(request.minStock());
+
+        stockRepository.save(newStock);
+
+        // stock.getQuantity() contiene el saldo exacto POST movimiento. Pasamos NULL en documentUuid porque un ajuste manual no tiene documento de respaldo.
+        recordKardexMovement(product, warehouse, currentUser, request.quantity(), newStock.getQuantity(), MovementType.ADJUSTMENT, null);
+
+        return stockMapper.toProductStockResponseDTO(newStock);
     }
 }

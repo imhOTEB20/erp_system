@@ -16,6 +16,8 @@ import com.warnes.erp.modules.cash.repository.CashMovementRepository;
 import com.warnes.erp.modules.cash.repository.CashRegisterRepository;
 import com.warnes.erp.modules.cash.repository.CashShiftRepository;
 import com.warnes.erp.modules.cash.service.CashService;
+import com.warnes.erp.modules.inventory.entity.Warehouse;
+import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,13 +41,25 @@ public class CashServiceImpl implements CashService {
     private final CashRegisterMapper cashRegisterMapper;
     private final CashShiftMapper cashShiftMapper;
 
+    private final WarehouseRepository warehouseRepository;
+
+
     @Override
     @Transactional
     public CashRegisterResponseDTO createRegister(CashRegisterRequestDTO request) {
-        if (cashRegisterRepository.existsByNameIgnoreCase(request.name())) {
-            throw new BusinessRuleException("Ya existe una caja registrada con ese nombre");
+        // 1. Buscamos la sucursal
+        Warehouse warehouse = warehouseRepository.findByUuid(request.warehouseUuid())
+                .orElseThrow(() -> new ResourceNotFoundException("La sucursal indicada no existe"));
+
+        // 2. Validamos unicidad dentro de esa sucursal
+        if (cashRegisterRepository.existsByWarehouse_IdAndNameIgnoreCase(warehouse.getId(), request.name())) {
+            throw new BusinessRuleException("Ya existe una caja registrada con ese nombre en esta sucursal");
         }
+
+        // 3. Mapeamos y asociamos
         CashRegister register = cashRegisterMapper.toEntity(request);
+        register.setWarehouse(warehouse);
+
         return cashRegisterMapper.toResponseDTO(cashRegisterRepository.save(register));
     }
 
@@ -78,6 +92,18 @@ public class CashServiceImpl implements CashService {
         shift.setStatus(ShiftStatus.OPEN);
 
         return cashShiftMapper.toResponseDTO(cashShiftRepository.save(shift));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CashRegisterResponseDTO> getRegistersByWarehouse(UUID warehouseUuid) {
+        if (!warehouseRepository.findByUuid(warehouseUuid).isPresent()) {
+            throw new ResourceNotFoundException("La sucursal no existe");
+        }
+
+        return cashRegisterRepository.findByWarehouse_Uuid(warehouseUuid).stream()
+                .map(cashRegisterMapper::toResponseDTO)
+                .toList();
     }
 
     @Override
