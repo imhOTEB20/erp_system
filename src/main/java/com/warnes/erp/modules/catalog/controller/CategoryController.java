@@ -2,6 +2,7 @@ package com.warnes.erp.modules.catalog.controller;
 
 import com.warnes.erp.common.ApiResponse;
 import com.warnes.erp.modules.catalog.dto.request.CategoryRequestDTO;
+import com.warnes.erp.modules.catalog.dto.response.BrandResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.CategoryResponseDTO;
 import com.warnes.erp.modules.catalog.service.CategoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,8 +50,33 @@ public class CategoryController {
     @Operation(summary = "Listar todas las categorías")
     @GetMapping
     public ResponseEntity<ApiResponse<List<CategoryResponseDTO>>> getAllCategories(
-            @RequestParam(defaultValue = "false") boolean includeInactive) {
-        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories(includeInactive)));
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) Boolean includeDeleted) {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories(isActive, includeDeleted)));
+    }
+
+    @Operation(summary = "Restaura una categoria que este eliminada.")
+    @PatchMapping("/{uuid}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<CategoryResponseDTO>> restore(
+            @PathVariable UUID uuid) {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.restoreCategory(uuid)));
+    }
+
+    @Operation(summary = "Listar todos las categorias eliminadas.")
+    @GetMapping("/deleted")
+    public ResponseEntity<ApiResponse<List<CategoryResponseDTO>>> getAllDeleted() {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllDeleted()));
+    }
+
+    //toggle_availability
+    @Operation(summary = "Alternar si la categoria esta o no disponible")
+    @PatchMapping("/{uuid}/toggle_availability")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> toggleAvailability(
+            @PathVariable UUID uuid) {
+        Boolean newState = categoryService.toggleAvailability(uuid);
+        return ResponseEntity.ok(ApiResponse.success(String.format("Categoria %s con exito", newState ? "activada" : "desactivada")));
     }
 
     @Operation(summary = "Eliminar Categoría")

@@ -16,7 +16,7 @@ import java.time.ZonedDateTime; // <-- IMPORTANTE
 
 @Entity
 @Table(name = "product_cross_references")
-@SQLRestriction("deleted_at IS NULL")
+//@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 public class ProductCrossReference extends AuditableEntity {

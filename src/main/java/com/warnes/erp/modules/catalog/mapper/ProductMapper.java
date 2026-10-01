@@ -7,6 +7,7 @@ import com.warnes.erp.modules.catalog.dto.response.ProductCrossReferenceResponse
 import com.warnes.erp.modules.catalog.dto.response.ProductResponseDTO;
 import com.warnes.erp.modules.catalog.entity.Product;
 import com.warnes.erp.modules.catalog.entity.ProductCrossReference;
+import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -28,6 +29,7 @@ public interface ProductMapper {
     @Mapping(target = "brand", ignore = true)
     @Mapping(target = "taxType", ignore = true)
     @Mapping(target = "crossReferences", ignore = true)
+    @Mapping(target = "kitItems", ignore = true)
     Product toEntity(ProductRequestDTO dto);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -42,6 +44,9 @@ public interface ProductMapper {
 
     @Mapping(target = "product", ignore = true)
     ProductCrossReference toCrossReferenceEntity(ProductCrossReferenceRequestDTO dto);
+
+
+    ProductSimpleResponseDTO toProductSimpleResponseDTO(Product product);
 
     // 2. Método default de MapStruct para el cálculo en memoria
     default BigDecimal calculateMargin(BigDecimal costPrice, BigDecimal salePrice) {

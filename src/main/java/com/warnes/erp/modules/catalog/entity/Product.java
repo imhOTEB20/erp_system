@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "products")
-@SQLRestriction("deleted_at IS NULL")
+//@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 public class Product extends AuditableEntity implements UuidIdentifiable {
@@ -51,6 +51,9 @@ public class Product extends AuditableEntity implements UuidIdentifiable {
 
     @Column(name = "is_kit", nullable = false)
     private boolean kit = false;
+
+    @Column(nullable = false)
+    private boolean active = true;
 
     @Column(name = "cost_price", nullable = false, precision = 14, scale = 4)
     private BigDecimal costPrice = BigDecimal.ZERO;

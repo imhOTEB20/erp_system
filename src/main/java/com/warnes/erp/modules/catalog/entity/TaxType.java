@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "tax_types")
-@SQLRestriction("deleted_at IS NULL") // El filtro se queda aquí
+//@SQLRestriction("deleted_at IS NULL") // El filtro se queda aquí
 @Getter
 @Setter
 public class TaxType extends AuditableEntity implements UuidIdentifiable { // <-- REGRESA LA HERENCIA

@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.catalog.dto.response;
 
+import com.warnes.erp.modules.catalog.entity.KitItem;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,6 +32,9 @@ public record ProductResponseDTO(
         @Schema(description = "Indica si es un kit de componentes", example = "false")
         boolean kit,
 
+        @Schema(description = "Indica si el producto esta activo o inhactivo para venta.")
+        boolean active,
+
         @Schema(description = "Precio de costo actual", example = "45000.00")
         BigDecimal costPrice,
 
@@ -44,5 +48,8 @@ public record ProductResponseDTO(
         TaxTypeResponseDTO taxType,
 
         @Schema(description = "Códigos equivalentes de la competencia")
-        List<ProductCrossReferenceResponseDTO> crossReferences
+        List<ProductCrossReferenceResponseDTO> crossReferences,
+
+        @Schema(description = "Lista de productos que pertenecen al kit, si es un kit.")
+        List<KitItem> kitItems
 ) {}

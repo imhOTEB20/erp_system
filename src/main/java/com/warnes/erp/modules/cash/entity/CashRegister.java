@@ -20,7 +20,7 @@ import java.util.UUID;
 @Table(name = "cash_registers")
 @Getter
 @Setter
-@SQLRestriction("deleted_at IS NULL")
+//@SQLRestriction("deleted_at IS NULL")
 public class CashRegister extends AuditableEntity implements UuidIdentifiable {
 
     @UuidGenerator

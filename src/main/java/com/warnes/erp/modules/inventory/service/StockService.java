@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.inventory.service;
 
+import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.inventory.dto.request.InitialStockRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.StockAdjustmentRequestDTO;
 import com.warnes.erp.modules.inventory.dto.response.ProductStockResponseDTO;
@@ -13,4 +14,5 @@ public interface StockService {
     ProductStockResponseDTO initializerStock(InitialStockRequestDTO request);
     List<StockMovementResponseDTO> getProductKardex(UUID productUuid);
     List<ProductStockResponseDTO> getProductsByWarehouse(UUID warehouseUuid);
+    List<ProductSimpleResponseDTO> getProductNonStockInWarehouse(UUID warehouseUuid);
 }

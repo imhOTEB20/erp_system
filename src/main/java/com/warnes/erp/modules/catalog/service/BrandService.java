@@ -10,6 +10,9 @@ public interface BrandService {
     BrandResponseDTO createBrand(BrandRequestDTO request);
     BrandResponseDTO updateBrand(UUID uuid, BrandRequestDTO request);
     BrandResponseDTO getBrandByUuid(UUID uuid);
-    List<BrandResponseDTO> getAllBrandes(boolean includeInactive);
+    List<BrandResponseDTO> getAllBrandes(Boolean isActive, Boolean includeDeleted);
     void deleteBrand(UUID uuid);
+    Boolean toggleAvailability(UUID uuid);
+    BrandResponseDTO restoreBrand(UUID uuid);
+    List<BrandResponseDTO> getAllDeleted();
 }

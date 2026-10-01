@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "categories")
-@SQLRestriction("deleted_at IS NULL")
+//@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 public class Category extends AuditableEntity implements UuidIdentifiable {

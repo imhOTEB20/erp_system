@@ -3,6 +3,7 @@ package com.warnes.erp.modules.inventory.controller;
 import com.warnes.erp.common.ApiResponse;
 import com.warnes.erp.modules.cash.dto.response.CashRegisterResponseDTO;
 import com.warnes.erp.modules.cash.service.CashService;
+import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.inventory.dto.request.WarehouseRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.WarehouseUpdateRequestDTO;
 import com.warnes.erp.modules.inventory.dto.response.ProductStockResponseDTO;
@@ -125,6 +126,17 @@ public class WarehouseController {
 
         return ResponseEntity.ok(
                 ApiResponse.success(response, "Inventario recuperado exitosamente.")
+        );
+    }
+
+    @Operation(summary = "Listar productos que no tienen stock en una sucursal.", description = "Devuelve todos los productos que no tienen stock en una sucursal determinada.")
+    @GetMapping("/{uuid}/non_stock")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
+    public ResponseEntity<ApiResponse<List<ProductSimpleResponseDTO>>> getProductNonStockInWarehouse(@PathVariable UUID uuid) {
+        List<ProductSimpleResponseDTO> response = stockService.getProductNonStockInWarehouse(uuid);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(response, "Productos con stock faltantes recuperado exitosamente.")
         );
     }
 }

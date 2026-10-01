@@ -3,8 +3,11 @@ package com.warnes.erp.modules.inventory.service.impl;
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ResourceNotFoundException;
 import com.warnes.erp.exception.StockAlreadyInitializedException;
+import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.catalog.entity.Product;
+import com.warnes.erp.modules.catalog.mapper.ProductMapper;
 import com.warnes.erp.modules.catalog.repository.ProductRepository;
+import com.warnes.erp.modules.catalog.repository.ProductSpecification;
 import com.warnes.erp.modules.inventory.dto.request.InitialStockRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.StockAdjustmentRequestDTO;
 import com.warnes.erp.modules.inventory.dto.response.ProductStockResponseDTO;
@@ -22,7 +25,7 @@ import com.warnes.erp.modules.inventory.service.StockService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.apache.coyote.BadRequestException;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +34,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +48,7 @@ public class StockServiceImpl implements StockService {
 
     private final StockMovementMapper stockMovementMapper;
     private final StockMapper stockMapper;
+    private final ProductMapper productMapper;
 
     @Override
     @Transactional
@@ -125,14 +130,27 @@ public class StockServiceImpl implements StockService {
     @Override
     @Transactional(readOnly = true) // Importante: readOnly para optimizar consultas
     public List<ProductStockResponseDTO> getProductsByWarehouse(UUID warehouseUuid) {
-
         Warehouse warehouse = warehouseRepository.findByUuid(warehouseUuid)
                 .orElseThrow(() -> new ResourceNotFoundException("Almacén no encontrado"));
 
-        // 2. Obtener stocks optimizados y mapear a DTO
-        return stockRepository.findAllByWarehouseUuid(warehouse.getUuid()).stream()
+
+        return stockRepository.findAllByWarehouseUuid(warehouseUuid).stream()
                 .map(stockMapper::toProductStockResponseDTO)
-                .toList();
+                .collect(Collectors.toList());
+
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductSimpleResponseDTO> getProductNonStockInWarehouse(UUID warehouseUuid) {
+        Specification<Product> filter = ProductSpecification.withoutStockInWarehouse(warehouseUuid);
+
+        List<Product> nonStockProducts = productRepository.findAll(filter
+                .and(ProductSpecification.notDeleted()));
+
+        return nonStockProducts.stream()
+                .map(productMapper::toProductSimpleResponseDTO)
+                .collect(Collectors.toList());
     }
 
     @Override

@@ -21,12 +21,6 @@ public record ProductUpdateRequestDTO(
         @Schema(description = "Nuevo identificador de Impuesto")
         UUID taxTypeUuid,
 
-        @Schema(description = "Cambiar indicador de servicio")
-        Boolean service,
-
-        @Schema(description = "Cambiar indicador de kit")
-        Boolean kit,
-
         @Schema(description = "Actualizar precio de costo")
         BigDecimal costPrice,
 

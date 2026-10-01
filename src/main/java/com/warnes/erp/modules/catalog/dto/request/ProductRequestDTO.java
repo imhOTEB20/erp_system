@@ -1,6 +1,7 @@
 package com.warnes.erp.modules.catalog.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -41,16 +42,24 @@ public record ProductRequestDTO(
         @Schema(description = "¿Es un combo armado de varios repuestos?")
         Boolean kit,
 
+        @Schema(description = "¿El producto esta disponible para venta?")
+        Boolean active,
+
         @NotNull(message = "El costo es obligatorio")
         BigDecimal costPrice,
 
         @NotNull(message = "El precio final es obligatorio")
         BigDecimal salePrice,
 
+        @Valid
+        @Schema(description = "Componentes del kit (Solo aplica si kit = true)")
+        List<KitItemRequestDTO> kitItems,
+
         List<ProductCrossReferenceRequestDTO> crossReferences
 ) {
         public ProductRequestDTO {
                 if (service == null) service = false;
                 if (kit == null) kit = false;
+                if (active == null) active = true;
         }
 }

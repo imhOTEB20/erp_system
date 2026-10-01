@@ -185,4 +185,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problem;
     }
+
+    @ExceptionHandler(ElementNotDeletedException.class)
+    public ProblemDetail handleElementNotDeleted(ElementNotDeletedException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Regla de Negocio Violada");
+        problem.setType(URI.create(BASE_TYPE_URI + "product-restore-unprocessable"));
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        return problem;
+    }
 }

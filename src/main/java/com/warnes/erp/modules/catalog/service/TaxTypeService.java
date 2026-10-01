@@ -10,6 +10,9 @@ public interface TaxTypeService {
     TaxTypeResponseDTO createTaxType(TaxTypeRequestDTO request);
     TaxTypeResponseDTO updateTaxType(UUID uuid, TaxTypeRequestDTO request);
     TaxTypeResponseDTO getTaxTypeByUuid(UUID uuid);
-    List<TaxTypeResponseDTO> getAllTaxTypes(boolean includeInactive);
+    List<TaxTypeResponseDTO> getAllTaxTypes(Boolean isActive, Boolean includeDeleted);
     void deleteTaxType(UUID uuid);
+    TaxTypeResponseDTO restoreTaxType(UUID uuid);
+    Boolean toggleAvailability(UUID uuid);
+    List<TaxTypeResponseDTO> getAllDeleted();
 }

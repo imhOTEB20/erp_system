@@ -17,4 +17,5 @@ public interface StockMapper {
 
     // Mapea directamente los campos 'quantity' y 'minStock' de la entidad
     StockResponseDTO toStockResponseDTO(Stock entity);
+
 }
