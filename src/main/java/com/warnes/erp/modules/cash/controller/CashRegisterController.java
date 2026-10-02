@@ -2,10 +2,10 @@ package com.warnes.erp.modules.cash.controller;
 
 import com.warnes.erp.common.ApiResponse;
 import com.warnes.erp.modules.cash.dto.request.CashRegisterRequestDTO;
+import com.warnes.erp.modules.cash.dto.request.CashRegisterUpdateRequestDTO;
 import com.warnes.erp.modules.cash.dto.response.CashRegisterResponseDTO;
-import com.warnes.erp.modules.cash.service.CashService;
-import com.warnes.erp.modules.catalog.dto.request.BrandRequestDTO;
-import com.warnes.erp.modules.catalog.dto.response.BrandResponseDTO;
+import com.warnes.erp.modules.cash.service.CashRegisterService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,13 +24,13 @@ import java.util.UUID;
 @Tag(name = "Cajas Registradoras", description = "Administración de estaciones físicas de cobro")
 public class CashRegisterController {
 
-    private final CashService cashService;
+    private final CashRegisterService cashRegisterService;
 
     @Operation(summary = "Crear nueva caja física", description = "Da de alta un punto de cobro. Exclusivo para administradores.")
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CashRegisterResponseDTO>> createRegister(@Valid @RequestBody CashRegisterRequestDTO request) {
-        CashRegisterResponseDTO response = cashService.createRegister(request);
+        CashRegisterResponseDTO response = cashRegisterService.createRegister(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Caja creada exitosamente"));
     }
@@ -39,7 +39,7 @@ public class CashRegisterController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
     public ResponseEntity<ApiResponse<List<CashRegisterResponseDTO>>> getAllRegisters() {
-        return ResponseEntity.ok(ApiResponse.success(cashService.getAllRegisters()));
+        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.getAllRegisters()));
     }
 
     //nuevos endpoints necesarios.
@@ -47,29 +47,29 @@ public class CashRegisterController {
     @PutMapping("/{uuid}")
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ApiResponse<CashRegisterResponseDTO>> update(
-            @PathVariable UUID uuid, @Valid @RequestBody CashRegisterRequestDTO request) {
-        return ResponseEntity.ok(ApiResponse.success(cashService.update(uuid, request), "Caja registradora actualizada."));
+            @PathVariable UUID uuid, @Valid @RequestBody CashRegisterUpdateRequestDTO request) {
+        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.update(uuid, request), "Caja registradora actualizada."));
     }
 
     @Operation(summary = "Consultar Caja Registradora por UUID")
     @GetMapping("/{uuid}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
     public ResponseEntity<ApiResponse<CashRegisterResponseDTO>> get(@PathVariable UUID uuid) {
-        return ResponseEntity.ok(ApiResponse.success(cashService.getCashRegisterByUuid(uuid)));
+        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.getCashRegisterByUuid(uuid)));
     }
 
     @Operation(summary = "Listar todas las cajas registradoras eliminadas.")
     @GetMapping("/deleted")
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<CashRegisterResponseDTO>>> getAllDeleted() {
-        return ResponseEntity.ok(ApiResponse.success(cashService.getAllDeleted()));
+        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.getAllDeleted()));
     }
 
     @Operation(summary = "Eliminar Caja Registradora", description = "Ejecuta un Soft Delete sobre el una caja registradora.")
     @DeleteMapping("/{uuid}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID uuid) {
-        cashService.delete(uuid);
+        cashRegisterService.delete(uuid);
         return ResponseEntity.ok(ApiResponse.success("Caja eliminada (Soft Delete)"));
     }
 
@@ -78,7 +78,7 @@ public class CashRegisterController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CashRegisterResponseDTO>> restore(
             @PathVariable UUID uuid) {
-        return ResponseEntity.ok(ApiResponse.success(cashService.restore(uuid)));
+        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.restore(uuid)));
     }
 
     //toggle_availability
@@ -87,7 +87,7 @@ public class CashRegisterController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> toggleAvailability(
             @PathVariable UUID uuid) {
-        Boolean newState = cashService.toggleAvailability(uuid);
+        Boolean newState = cashRegisterService.toggleAvailability(uuid);
         return ResponseEntity.ok(ApiResponse.success(String.format("Caja %s con exito", newState ? "activada" : "desactivada")));
     }
 }

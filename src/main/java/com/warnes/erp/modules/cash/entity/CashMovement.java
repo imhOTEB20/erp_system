@@ -1,6 +1,7 @@
 package com.warnes.erp.modules.cash.entity;
 
 import com.warnes.erp.common.BaseEntity;
+import com.warnes.erp.modules.security.entity.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,6 +21,11 @@ public class CashMovement extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cash_shift_id", nullable = false)
     private CashShift cashShift;
+
+    // NUEVO: Trazabilidad del usuario que ejecutó o autorizó el movimiento
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "movement_type", nullable = false, length = 30)

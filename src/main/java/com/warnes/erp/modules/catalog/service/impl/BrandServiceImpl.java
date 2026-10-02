@@ -91,7 +91,7 @@ public class BrandServiceImpl implements BrandService {
             brand.setDeletedAt(null);
             brand.setActive(true);
         } else {
-            throw new ElementNotDeletedException("El brand no esta eliminado.");
+            throw new ElementNotDeletedException("La marca no esta eliminada.");
         }
 
         return brandMapper.toResponseDTO(

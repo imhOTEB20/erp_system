@@ -28,9 +28,15 @@ public class CashShift extends BaseEntity implements UuidIdentifiable {
     @JoinColumn(name = "cash_register_id", nullable = false)
     private CashRegister cashRegister;
 
+    // Quién abrió el turno
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    // NUEVO: Quién cerró el turno (Cajero, Admin o null si sigue abierto)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "closed_by_user_id")
+    private User closedByUser;
 
     @Column(name = "opened_at", nullable = false)
     private ZonedDateTime openedAt = ZonedDateTime.now();

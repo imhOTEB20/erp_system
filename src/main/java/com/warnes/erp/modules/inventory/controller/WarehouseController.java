@@ -2,7 +2,7 @@ package com.warnes.erp.modules.inventory.controller;
 
 import com.warnes.erp.common.ApiResponse;
 import com.warnes.erp.modules.cash.dto.response.CashRegisterResponseDTO;
-import com.warnes.erp.modules.cash.service.CashService;
+import com.warnes.erp.modules.cash.service.CashRegisterService;
 import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.inventory.dto.request.WarehouseRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.WarehouseUpdateRequestDTO;
@@ -30,7 +30,7 @@ import java.util.UUID;
 public class WarehouseController {
 
     private final WarehouseService warehouseService;
-    private final CashService cashService;
+    private final CashRegisterService cashRegisterService;
     private final StockService stockService;
 
     @Operation(summary = "Crear Almacén", description = "Registra una nueva sucursal física en el sistema.")
@@ -112,7 +112,7 @@ public class WarehouseController {
     @GetMapping("/{uuid}/cash-registers")
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
     public ResponseEntity<ApiResponse<List<CashRegisterResponseDTO>>> getRegistersByWarehouse(@PathVariable UUID uuid) {
-        List<CashRegisterResponseDTO> response = cashService.getRegistersByWarehouse(uuid);
+        List<CashRegisterResponseDTO> response = cashRegisterService.getRegistersByWarehouse(uuid);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
