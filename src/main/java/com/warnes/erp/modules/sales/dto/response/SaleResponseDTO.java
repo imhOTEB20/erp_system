@@ -1,6 +1,10 @@
 package com.warnes.erp.modules.sales.dto.response;
 
+import com.warnes.erp.modules.sales.dto.request.SalePaymentRequestDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -35,9 +39,18 @@ public record SaleResponseDTO(
         @Schema(description = "Monto final facturado", example = "150000.00")
         BigDecimal totalAmount,
 
+        @Schema(description = "Nombre de la sucursal donde se realizo la venta.")
+        String warehouseName,
+
+        @Schema(description = "UUID de la sucursal donde se realizo la venta.")
+        UUID warehouseUuid,
+
         @Schema(description = "Fecha de emisión UTC", example = "2026-09-23T16:30:00Z")
         ZonedDateTime createdAt,
 
         @Schema(description = "Lista de mercadería procesada")
-        List<SaleItemResponseDTO> items
+        List<SaleItemResponseDTO> items,
+
+        @Schema(description = "Listado de pagos procesados")
+        List<SalePaymentRequestDTO> payments
 ) {}

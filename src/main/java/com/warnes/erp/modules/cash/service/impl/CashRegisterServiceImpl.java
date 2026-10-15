@@ -56,8 +56,12 @@ public class CashRegisterServiceImpl implements CashRegisterService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CashRegisterResponseDTO> getAllRegisters() {
-        return cashRegisterRepository.findAll().stream()
+    public List<CashRegisterResponseDTO> getAllRegisters(UUID warehouseUuid, Boolean isActive, Boolean includeDeleted) {
+        if (warehouseUuid != null && warehouseRepository.findByUuid(warehouseUuid).isEmpty()) {
+            throw new ResourceNotFoundException("La sucursal no existe");
+        }
+        Specification<CashRegister> filter = CashRegisterSpecification.withDynamicFilters(warehouseUuid, isActive, includeDeleted);
+        return cashRegisterRepository.findAll(filter).stream()
                 .map(cashRegisterMapper::toResponseDTO)
                 .toList();
     }
@@ -65,7 +69,7 @@ public class CashRegisterServiceImpl implements CashRegisterService {
     @Override
     @Transactional(readOnly = true)
     public List<CashRegisterResponseDTO> getRegistersByWarehouse(UUID warehouseUuid) {
-        if (!warehouseRepository.findByUuid(warehouseUuid).isPresent()) {
+        if (warehouseRepository.findByUuid(warehouseUuid).isEmpty()) {
             throw new ResourceNotFoundException("La sucursal no existe");
         }
 

@@ -136,6 +136,16 @@ public class ProductController {
         );
     }
 
+    @Operation(summary = "Traer un producto por su codigo SKU", description = "Recibe un codigo SKU y trae el producto referente si existe.")
+    @GetMapping("/sku/{sku}")
+    public ResponseEntity<ApiResponse<ProductResponseDTO>> getProductBySku(
+            @PathVariable String sku
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(productService.getProductBySku(sku), "Producto encontrado.")
+        );
+    }
+
     @Operation(summary = "Importación Masiva (CSV)", description = "Carga masiva de códigos equivalentes para enriquecer la base de datos rápidamente.")
     @PostMapping(value = "/cross-references/import-csv", consumes = "multipart/form-data")
     @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")

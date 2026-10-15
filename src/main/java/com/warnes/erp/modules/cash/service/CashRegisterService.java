@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public interface CashRegisterService {
     CashRegisterResponseDTO createRegister(CashRegisterRequestDTO request);
-    List<CashRegisterResponseDTO> getAllRegisters();
+    List<CashRegisterResponseDTO> getAllRegisters(UUID warehouseUuid, Boolean isActive, Boolean includeDeleted);
     List<CashRegisterResponseDTO> getRegistersByWarehouse(UUID warehouseUuid);
 
     //metodos nuevos

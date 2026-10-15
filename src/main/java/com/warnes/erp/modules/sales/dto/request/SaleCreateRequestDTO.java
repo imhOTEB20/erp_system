@@ -12,10 +12,6 @@ import java.util.UUID;
 
 @Schema(description = "Payload para iniciar una nueva venta en mostrador (POS) o backoffice (B2B)")
 public record SaleCreateRequestDTO(
-        @Schema(description = "Número legal o interno de comprobante", example = "B-0001-0000123")
-        @NotBlank(message = "El número de factura es obligatorio")
-        @Size(max = 30, message = "El número de factura no puede superar los 30 caracteres")
-        String invoiceNumber,
 
         @Schema(description = "UUID del almacén/sucursal origen (Ej: Sucursal El Carril)", example = "123e4567-e89b-12d3-a456-426614174000")
         @NotNull(message = "El almacén de origen es obligatorio")

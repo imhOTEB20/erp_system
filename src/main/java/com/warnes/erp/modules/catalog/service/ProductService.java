@@ -26,4 +26,6 @@ public interface ProductService {
     Page<ProductResponseDTO> searchByCode(String query, UUID categoryUuid, UUID brandUuid, Boolean isKit, Boolean isService, Boolean isActive, Boolean includeDeleted, Pageable pageable); // Renombrado para coincidir con tu Controller
     void deleteProduct(UUID uuid);
     BulkImportResponseDTO importCrossReferencesCsv(MultipartFile file); // Agregado para tu importación CSV
+
+    ProductResponseDTO getProductBySku(String sku);
 }

@@ -18,7 +18,9 @@ import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
 import com.warnes.erp.modules.sales.dto.request.CreditNoteRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleItemRequestDTO;
+import com.warnes.erp.modules.sales.dto.response.CreditNoteResponseDTO;
 import com.warnes.erp.modules.sales.entity.*;
+import com.warnes.erp.modules.sales.mapper.CreditNoteMapper;
 import com.warnes.erp.modules.sales.repository.CreditNoteRepository;
 import com.warnes.erp.modules.sales.repository.CustomerRepository;
 import com.warnes.erp.modules.sales.repository.SaleRepository;
@@ -27,6 +29,8 @@ import com.warnes.erp.modules.sales.service.CustomerLedgerService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +53,8 @@ public class CreditNoteServiceImpl implements CreditNoteService {
     private final UserRepository userRepository;
 
     private final CustomerLedgerService customerLedgerService;
+
+    private final CreditNoteMapper creditNoteMapper;
 
     @Override
     @Transactional
@@ -158,6 +164,20 @@ public class CreditNoteServiceImpl implements CreditNoteService {
 
         // Si la devolución total iguala a la venta original, se puede marcar la venta como REFUNDED.
         // Omitido por simplicidad, se maneja con reportes sumando las NC vinculadas a una Sale.
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CreditNoteResponseDTO> getCreditNotes(Pageable pageable) {
+        return creditNoteRepository.findAll(pageable).map(creditNoteMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CreditNoteResponseDTO getCreditNoteByUuid(UUID uuid) {
+        return creditNoteRepository.findByUuid(uuid)
+                .map(creditNoteMapper::toResponseDTO)
+                .orElseThrow(() -> new ResourceNotFoundException("Nota de crédito no encontrada"));
     }
 
     private User getCurrentAuthenticatedUser() {

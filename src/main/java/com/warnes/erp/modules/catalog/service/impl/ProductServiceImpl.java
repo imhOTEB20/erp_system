@@ -315,6 +315,17 @@ public class ProductServiceImpl implements ProductService {
 
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponseDTO getProductBySku(String sku) {
+        Specification<Product> filter = Specification
+                .where(ProductSpecification.hasSku(sku))
+                .and(ProductSpecification.notDeleted());
+
+        return productMapper.toResponseDTO(productRepository.findOne(filter)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado")));
+    }
+
     private Product findByUuid(UUID uuid) {
         Specification<Product> filter = Specification
                 .where(ProductSpecification.hasUuid(uuid))

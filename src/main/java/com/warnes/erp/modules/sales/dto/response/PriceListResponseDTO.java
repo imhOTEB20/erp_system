@@ -13,5 +13,8 @@ public record PriceListResponseDTO(
         String name,
 
         @Schema(description = "Porcentaje de alteración del precio", example = "-15.00")
-        BigDecimal marginPercentage
+        BigDecimal marginPercentage,
+
+        @Schema(description = "Indica si lista de precios esta disponible")
+        Boolean active
 ) {}

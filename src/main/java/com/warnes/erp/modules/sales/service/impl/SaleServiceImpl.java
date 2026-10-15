@@ -17,6 +17,7 @@ import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
+import com.warnes.erp.modules.sales.dto.request.SaleCheckoutRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleCreateRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleItemRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SalePaymentRequestDTO;
@@ -25,17 +26,24 @@ import com.warnes.erp.modules.sales.entity.*;
 import com.warnes.erp.modules.sales.mapper.SaleMapper;
 import com.warnes.erp.modules.sales.repository.CustomerRepository;
 import com.warnes.erp.modules.sales.repository.SaleRepository;
+import com.warnes.erp.modules.sales.repository.SaleSpecification;
 import com.warnes.erp.modules.sales.service.CustomerLedgerService;
+import com.warnes.erp.modules.sales.service.InvoiceGeneratorService;
 import com.warnes.erp.modules.sales.service.SaleService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -54,14 +62,11 @@ public class SaleServiceImpl implements SaleService {
     private final SaleMapper saleMapper;
 
     private final CustomerLedgerService customerLedgerService;
+    private final InvoiceGeneratorService invoiceGeneratorService;
 
     @Override
     @Transactional // Garantiza ACID en la facturación y la validación de inventario
     public SaleResponseDTO createSale(SaleCreateRequestDTO request) {
-
-        if (saleRepository.existsByInvoiceNumberIgnoreCase(request.invoiceNumber())) {
-            throw new BusinessRuleException("El número de factura ya existe: " + request.invoiceNumber());
-        }
 
         // 1. Trazabilidad de Auditoría (El "Fantasma")
         // Obtenemos al usuario autenticado desde el SecurityContext de Spring (Token JWT)
@@ -69,7 +74,8 @@ public class SaleServiceImpl implements SaleService {
         User currentUser = getCurrentAuthenticatedUser();
 
         Sale sale = new Sale();
-        sale.setInvoiceNumber(request.invoiceNumber());
+        String generatedInvoiceNumber = invoiceGeneratorService.generateSaleInvoiceNumber(request.isB2B());
+        sale.setInvoiceNumber(generatedInvoiceNumber);
         sale.setUser(currentUser); // Firma inmutable del responsable de la operación
         sale.setStatus(SaleStatus.PENDING_PAYMENT); // Reserva lógica, espera registro de pago
 
@@ -145,65 +151,58 @@ public class SaleServiceImpl implements SaleService {
 
     @Override
     @Transactional
-    public SaleResponseDTO registerPayment(UUID saleUuid, SalePaymentRequestDTO request, UUID originWarehouseUuid) {
+    public SaleResponseDTO registerPayments(UUID saleUuid, List<SalePaymentRequestDTO> requests, UUID originWarehouseUuid) {
         Sale sale = saleRepository.findByUuid(saleUuid)
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada"));
 
         if (sale.getStatus() != SaleStatus.PENDING_PAYMENT) {
-            throw new BusinessRuleException("La venta no está pendiente de pago");
+            throw new BusinessRuleException("La venta ya no se encuentra pendiente de pago");
         }
 
-        // Lógica: Pago con Saldo a Favor o A Crédito (Deuda)
-        if (request.paymentMethod() == PaymentMethod.STORE_CREDIT || request.paymentMethod() == PaymentMethod.ON_CREDIT) {
-            if (sale.getCustomer() == null) {
-                throw new BusinessRuleException("No se puede operar con cuentas corrientes en ventas a Consumidor Final");
-            }
+        // Iterar sobre cada método de pago enviado (Ej: 40% Efectivo + 60% Transferencia)
+        for (SalePaymentRequestDTO request : requests) {
 
-            // Bloqueo pesimista del cliente para evitar condiciones de carrera
-            Customer customer = customerRepository.findByIdForUpdate(sale.getCustomer().getId())
-                    .orElseThrow(() -> new BusinessRuleException("Error de concurrencia con el cliente"));
+            // Validaciones de Cuenta Corriente (Deuda o Saldo a favor)
+            if (request.paymentMethod() == PaymentMethod.STORE_CREDIT || request.paymentMethod() == PaymentMethod.ON_CREDIT) {
+                if (sale.getCustomer() == null) {
+                    throw new BusinessRuleException("No se puede operar con cuentas corrientes en ventas a Consumidor Final");
+                }
 
-            BigDecimal projectedBalance = customer.getCurrentBalance().subtract(request.amount());
+                Customer customer = customerRepository.findByIdForUpdate(sale.getCustomer().getId())
+                        .orElseThrow(() -> new BusinessRuleException("Error de concurrencia con el cliente"));
 
-            if (request.paymentMethod() == PaymentMethod.STORE_CREDIT) {
-                // Solo puede usar la plata que tiene a favor (no puede bajar de 0 con este método)
-                if (projectedBalance.compareTo(BigDecimal.ZERO) < 0) {
+                BigDecimal projectedBalance = customer.getCurrentBalance().subtract(request.amount());
+
+                if (request.paymentMethod() == PaymentMethod.STORE_CREDIT && projectedBalance.compareTo(BigDecimal.ZERO) < 0) {
                     throw new BusinessRuleException("Saldo a favor insuficiente. Disponible: $" + customer.getCurrentBalance());
+                } else if (request.paymentMethod() == PaymentMethod.ON_CREDIT) {
+                    BigDecimal maxAllowedDebt = customer.getCreditLimit().negate();
+                    if (projectedBalance.compareTo(maxAllowedDebt) < 0) {
+                        throw new BusinessRuleException("Límite de crédito excedido.");
+                    }
                 }
-            } else { // ON_CREDIT
-                // Puede bajar de 0, pero sin superar el límite de crédito (negativo)
-                BigDecimal maxAllowedDebt = customer.getCreditLimit().negate();
-                if (projectedBalance.compareTo(maxAllowedDebt) < 0) {
-                    throw new BusinessRuleException(
-                            "Límite de crédito excedido. Límite: $" + customer.getCreditLimit() +
-                                    " | Deuda actual: $" + customer.getCurrentBalance().min(BigDecimal.ZERO).abs()
-                    );
-                }
+
+                customer.setCurrentBalance(projectedBalance);
+                customerRepository.save(customer);
+
+                LedgerMovementType ledgerType = request.paymentMethod() == PaymentMethod.STORE_CREDIT
+                        ? LedgerMovementType.PAYMENT_WITH_CREDIT
+                        : LedgerMovementType.SALE_ON_CREDIT;
+                customerLedgerService.recordMovement(customer, sale, ledgerType, request.amount(), customer.getCurrentBalance());
             }
 
-            // Deducir saldo (o aumentar deuda)
-            customer.setCurrentBalance(projectedBalance);
-            customerRepository.save(customer);
-
-            // Registrar en el Libro Mayor
-            LedgerMovementType ledgerType = request.paymentMethod() == PaymentMethod.STORE_CREDIT
-                    ? LedgerMovementType.PAYMENT_WITH_CREDIT
-                    : LedgerMovementType.SALE_ON_CREDIT;
-
-            customerLedgerService.recordMovement(customer, sale, ledgerType, request.amount(), customer.getCurrentBalance());
+            SalePayment payment = new SalePayment();
+            payment.setSale(sale);
+            payment.setPaymentMethod(request.paymentMethod());
+            payment.setAmount(request.amount());
+            sale.getPayments().add(payment);
         }
-
-        SalePayment payment = new SalePayment();
-        payment.setSale(sale);
-        payment.setPaymentMethod(request.paymentMethod());
-        payment.setAmount(request.amount());
-        sale.getPayments().add(payment);
 
         BigDecimal totalPaid = sale.getPayments().stream()
                 .map(SalePayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Ajuste de Centavos (Tolerancia de $10 pesos argentinos)
+        // Tolerancia de redondeo ($10 ARS)
         BigDecimal difference = sale.getTotalAmount().subtract(totalPaid);
         if (difference.compareTo(BigDecimal.ZERO) > 0 && difference.compareTo(new BigDecimal("10.00")) <= 0) {
             SalePayment roundingAdjustment = new SalePayment();
@@ -214,10 +213,172 @@ public class SaleServiceImpl implements SaleService {
             totalPaid = totalPaid.add(difference);
         }
 
+        // Consolidación final si se cubrió el total
         if (totalPaid.compareTo(sale.getTotalAmount()) >= 0) {
-            completeSaleTransaction(sale, originWarehouseUuid);
+            // Deducción de sucursal: Toma la de la caja si es POS, o la que vino por parámetro si es B2B
+            UUID effectiveWarehouseUuid = sale.getCashShift() != null
+                    ? sale.getCashShift().getCashRegister().getWarehouse().getUuid()
+                    : originWarehouseUuid;
+
+            if (effectiveWarehouseUuid == null) {
+                throw new BusinessRuleException("No se pudo determinar el almacén para deducir el stock (B2B exige originWarehouseUuid).");
+            }
+            completeSaleTransaction(sale, effectiveWarehouseUuid);
         }
 
+        return saleMapper.toResponseDTO(saleRepository.save(sale));
+    }
+
+    @Override
+    @Transactional // Garantiza que toda la operatoria sea atómica (ACID)
+    public SaleResponseDTO checkout(SaleCheckoutRequestDTO request) {
+        User currentUser = getCurrentAuthenticatedUser();
+
+        // 1. RESOLUCIÓN DE CONTEXTO Y SUCURSAL (B2B vs POS)
+        CashShift activeShift = getActiveCashShift(currentUser);
+        Warehouse originWarehouse = activeShift.getCashRegister().getWarehouse();
+
+        // 2. RESOLUCIÓN DE CLIENTE Y MÁRGENES COMERCIALES
+        Customer customer = null;
+        BigDecimal customerMargin = BigDecimal.ZERO;
+        if (request.customerUuid() != null) {
+            customer = customerRepository.findByUuid(request.customerUuid())
+                    .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado."));
+            if (customer.getPriceList() != null) {
+                customerMargin = customer.getPriceList().getMarginPercentage();
+            }
+        }
+
+        // 3. INICIALIZACIÓN DE LA FACTURA (Con Secuencias Nativas AFIP)
+        Sale sale = new Sale();
+        sale.setInvoiceNumber(invoiceGeneratorService.generateSaleInvoiceNumber(false));
+        sale.setUser(currentUser);
+        sale.setCashShift(activeShift);
+        sale.setCustomer(customer);
+        sale.setStatus(SaleStatus.COMPLETED); // Nace completada al ser un One-Step Checkout
+
+        // Persistimos la cabecera tempranamente para obtener el ID/UUID requerido en las FK del Kardex y Pagos
+        sale = saleRepository.save(sale);
+
+        // 4. PROCESAMIENTO DE ITEMS, BLOQUEO PESIMISTA Y KARDEX
+        BigDecimal saleTotalAmount = BigDecimal.ZERO;
+
+        for (SaleItemRequestDTO itemDto : request.items()) {
+            Product product = productRepository.findByUuid(itemDto.productUuid())
+                    .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado."));
+
+            // Lock Pesimista (FOR UPDATE) en BD: Evita la condición de carrera si 2 cajeros venden la misma bujía al mismo milisegundo
+            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), originWarehouse.getId())
+                    .orElseThrow(() -> new BusinessRuleException("Stock no inicializado para: " + product.getSku()));
+
+            if (stock.getQuantity().compareTo(itemDto.quantity()) < 0) {
+                throw new BusinessRuleException("Stock insuficiente para: " + product.getSku() + ". Disponible: " + stock.getQuantity());
+            }
+
+            // Deducción inmutable de inventario
+            BigDecimal newBalance = stock.getQuantity().subtract(itemDto.quantity());
+            stock.setQuantity(newBalance);
+            stockRepository.save(stock);
+
+            // Registro inmutable de auditoría en Kardex
+            recordKardexMovement(product, originWarehouse, currentUser, itemDto.quantity(), newBalance, sale.getUuid());
+
+            // Cálculos financieros exactos
+            BigDecimal finalUnitPrice = calculateFinalPrice(product.getSalePrice(), customerMargin);
+            BigDecimal subtotal = finalUnitPrice.multiply(itemDto.quantity()).setScale(2, RoundingMode.HALF_UP);
+
+            SaleItem saleItem = new SaleItem();
+            saleItem.setSale(sale);
+            saleItem.setProduct(product);
+            saleItem.setQuantity(itemDto.quantity());
+            saleItem.setUnitPrice(finalUnitPrice);
+            saleItem.setSubtotal(subtotal);
+            sale.getItems().add(saleItem);
+
+            saleTotalAmount = saleTotalAmount.add(subtotal);
+        }
+        sale.setTotalAmount(saleTotalAmount);
+
+        // 5. PROCESAMIENTO DE PAGOS MIXTOS
+        BigDecimal totalPaid = BigDecimal.ZERO;
+
+        for (SalePaymentRequestDTO paymentDto : request.payments()) {
+            PaymentMethod method = paymentDto.paymentMethod();
+            BigDecimal amount = paymentDto.amount();
+
+            // Lógica Financiera: Cuentas Corrientes y Límite de Crédito
+            if (method == PaymentMethod.STORE_CREDIT || method == PaymentMethod.ON_CREDIT) {
+                if (customer == null) {
+                    throw new BusinessRuleException("No se puede operar con cuenta corriente a Consumidor Final.");
+                }
+
+                // Lock Pesimista del cliente
+                Customer lockedCustomer = customerRepository.findByIdForUpdate(customer.getId())
+                        .orElseThrow(() -> new BusinessRuleException("Error de concurrencia al procesar el cliente."));
+
+                BigDecimal projectedBalance = lockedCustomer.getCurrentBalance().subtract(amount);
+
+                if (method == PaymentMethod.STORE_CREDIT && projectedBalance.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new BusinessRuleException("Saldo a favor insuficiente. Disponible: $" + lockedCustomer.getCurrentBalance());
+                } else if (method == PaymentMethod.ON_CREDIT) {
+                    BigDecimal maxAllowedDebt = lockedCustomer.getCreditLimit().negate();
+                    if (projectedBalance.compareTo(maxAllowedDebt) < 0) {
+                        throw new BusinessRuleException("Límite de crédito excedido. Disponible: $" + lockedCustomer.getCurrentBalance().subtract(maxAllowedDebt));
+                    }
+                }
+
+                lockedCustomer.setCurrentBalance(projectedBalance);
+                customerRepository.save(lockedCustomer);
+
+                // Asentar en Libro Mayor
+                LedgerMovementType ledgerType = method == PaymentMethod.STORE_CREDIT ? LedgerMovementType.PAYMENT_WITH_CREDIT : LedgerMovementType.SALE_ON_CREDIT;
+                customerLedgerService.recordMovement(lockedCustomer, sale, ledgerType, amount, lockedCustomer.getCurrentBalance());
+            }
+
+            // Lógica Física: Arqueo de Caja (Solo el billete físico altera la gaveta)
+            if (method == PaymentMethod.CASH) {
+                CashMovement cashMovement = new CashMovement();
+                cashMovement.setCashShift(activeShift);
+                cashMovement.setMovementType(CashMovementType.SALE_PAYMENT);
+                cashMovement.setAmount(amount);
+                cashMovement.setDescription("Pago Factura: " + sale.getInvoiceNumber());
+                cashMovement.setUser(currentUser);
+                cashMovementRepository.save(cashMovement);
+
+                // Impactar el balance esperado a rendir
+                activeShift.setExpectedBalance(activeShift.getExpectedBalance().add(amount));
+                cashShiftRepository.save(activeShift);
+            }
+
+            SalePayment payment = new SalePayment();
+            payment.setSale(sale);
+            payment.setPaymentMethod(method);
+            payment.setAmount(amount);
+            sale.getPayments().add(payment);
+
+            totalPaid = totalPaid.add(amount);
+        }
+
+        // 6. CONCILIACIÓN MATEMÁTICA Y REDONDEO
+        BigDecimal difference = saleTotalAmount.subtract(totalPaid);
+
+        if (difference.compareTo(BigDecimal.ZERO) > 0) {
+            // Tolerancia contable de hasta $200.00 ARS en mostrador
+            if (difference.compareTo(new BigDecimal("200.00")) <= 0) {
+                SalePayment roundingAdjustment = new SalePayment();
+                roundingAdjustment.setSale(sale);
+                roundingAdjustment.setPaymentMethod(PaymentMethod.ROUNDING_ADJUSTMENT);
+                roundingAdjustment.setAmount(difference);
+                sale.getPayments().add(roundingAdjustment);
+                totalPaid = totalPaid.add(difference);
+            } else {
+                throw new BusinessRuleException("Fondos insuficientes: El abono total ($" + totalPaid + ") no cubre el monto de la factura ($" + saleTotalAmount + ").");
+            }
+        } else if (difference.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessRuleException("Error contable: El pago ($" + totalPaid + ") excede el total a facturar ($" + saleTotalAmount + "). Ingrese el cambio correcto.");
+        }
+
+        // Guardamos el detalle completo y retornamos el DTO limpio (sin exponer IDs)
         return saleMapper.toResponseDTO(saleRepository.save(sale));
     }
 
@@ -247,22 +408,30 @@ public class SaleServiceImpl implements SaleService {
 
         // 2. Impactar los pagos en la Caja Activa
         CashShift shift = sale.getCashShift();
-        for (SalePayment payment : sale.getPayments()) {
-            CashMovement cashMovement = new CashMovement();
-            cashMovement.setCashShift(shift);
-            cashMovement.setMovementType(CashMovementType.SALE_PAYMENT);
-            cashMovement.setAmount(payment.getAmount());
-            cashMovement.setDescription("Pago Factura: " + sale.getInvoiceNumber() + " [" + payment.getPaymentMethod().name() + "]");
-            cashMovementRepository.save(cashMovement);
+        if (shift != null) {
+            for (SalePayment payment : sale.getPayments()) {
+                // Solo registramos el movimiento transaccional en la caja si implica flujo de dinero (ej. ignorar ON_CREDIT)
+                if (payment.getPaymentMethod() != PaymentMethod.ON_CREDIT) {
+                    CashMovement cashMovement = new CashMovement();
+                    cashMovement.setCashShift(shift);
+                    cashMovement.setMovementType(CashMovementType.SALE_PAYMENT);
+                    // El cajero solo ve el ingreso de capital (amount). El recargo va directo al banco.
+                    cashMovement.setAmount(payment.getAmount());
+                    cashMovement.setDescription("Pago Factura: " + sale.getInvoiceNumber() + " [" + payment.getPaymentMethod().name() + "]");
+                    // NUEVO: Trazabilidad de quién cobró
+                    cashMovement.setUser(currentUser);
+                    cashMovementRepository.save(cashMovement);
 
-            // Solo sumar al balance esperado si es EFECTIVO (para facilitar el arqueo de gaveta física)
-            if (payment.getPaymentMethod() == PaymentMethod.CASH) {
-                shift.setExpectedBalance(shift.getExpectedBalance().add(payment.getAmount()));
+                    // CORRECCIÓN VITAL: Solo el EFECTIVO suma al expectedBalance (gaveta física)
+                    if (payment.getPaymentMethod() == PaymentMethod.CASH) {
+                        shift.setExpectedBalance(shift.getExpectedBalance().add(payment.getAmount()));
+                    }
+                }
             }
-        }
 
-        cashShiftRepository.save(shift);
-        sale.setStatus(SaleStatus.COMPLETED);
+            cashShiftRepository.save(shift);
+            sale.setStatus(SaleStatus.COMPLETED);
+        }
     }
 
     private void recordKardexMovement(Product product, Warehouse warehouse, User user, BigDecimal quantity, BigDecimal balanceAfter, UUID saleUuid) {
@@ -314,5 +483,20 @@ public class SaleServiceImpl implements SaleService {
         Sale sale = saleRepository.findByUuid(uuid)
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada"));
         return saleMapper.toResponseDTO(sale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SaleResponseDTO> getSales(SaleStatus status, UUID customerUuid, ZonedDateTime from, ZonedDateTime to, Pageable pageable) {
+        Specification<Sale> spec = SaleSpecification.withDynamicFilters(status, customerUuid, from, to);
+        return saleRepository.findAll(spec, pageable).map(saleMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SaleResponseDTO getSaleByInvoiceNumber(String invoiceNumber) {
+        return saleRepository.findByInvoiceNumberIgnoreCase(invoiceNumber)
+                .map(saleMapper::toResponseDTO)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontró factura con el número proporcionado"));
     }
 }

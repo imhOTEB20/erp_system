@@ -134,4 +134,13 @@ public class ProductSpecification {
     public static Specification<Product> hasUuid(UUID uuid) {
         return (root, query, cb) -> cb.equal(root.get("uuid"), uuid);
     }
+
+    public static Specification<Product> hasSku(String sku) {
+        return (root, query, cb) ->
+                cb.equal(
+                        cb.upper(root.get("sku")),
+                        sku.toUpperCase()
+                );
+    }
+
 }

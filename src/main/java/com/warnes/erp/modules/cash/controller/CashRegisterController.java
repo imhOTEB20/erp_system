@@ -7,6 +7,7 @@ import com.warnes.erp.modules.cash.dto.response.CashRegisterResponseDTO;
 import com.warnes.erp.modules.cash.service.CashRegisterService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,8 +39,12 @@ public class CashRegisterController {
     @Operation(summary = "Listar cajas", description = "Devuelve todas las estaciones de caja del sistema para poder aperturar turnos.")
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
-    public ResponseEntity<ApiResponse<List<CashRegisterResponseDTO>>> getAllRegisters() {
-        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.getAllRegisters()));
+    public ResponseEntity<ApiResponse<List<CashRegisterResponseDTO>>> getAllRegisters(
+            @Parameter(description = "UUID de la sucursal") @RequestParam(required = false) UUID warehouseUuid,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) Boolean includeDeleted
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(cashRegisterService.getAllRegisters(warehouseUuid, isActive, includeDeleted)));
     }
 
     //nuevos endpoints necesarios.

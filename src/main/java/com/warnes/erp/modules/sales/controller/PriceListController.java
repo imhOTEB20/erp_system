@@ -1,6 +1,7 @@
 package com.warnes.erp.modules.sales.controller;
 
 import com.warnes.erp.common.ApiResponse;
+import com.warnes.erp.modules.catalog.dto.response.BrandResponseDTO;
 import com.warnes.erp.modules.sales.dto.request.PriceListRequestDTO;
 import com.warnes.erp.modules.sales.dto.response.PriceListResponseDTO;
 import com.warnes.erp.modules.sales.service.PriceListService;
@@ -35,8 +36,11 @@ public class PriceListController {
 
     @Operation(summary = "Listar todas las Listas de Precios")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PriceListResponseDTO>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.success(priceListService.getAllPriceLists()));
+    public ResponseEntity<ApiResponse<List<PriceListResponseDTO>>> getAll(
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) Boolean includeDeleted
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(priceListService.getAllPriceLists(isActive, includeDeleted)));
     }
 
     @Operation(summary = "Consultar Lista de Precios")
@@ -59,5 +63,29 @@ public class PriceListController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID uuid) {
         priceListService.deletePriceList(uuid);
         return ResponseEntity.ok(ApiResponse.success("Lista de precios inhabilitada (Soft Delete)"));
+    }
+
+    @Operation(summary = "Restaura una lista de precios que este eliminada.")
+    @PatchMapping("/{uuid}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<PriceListResponseDTO>> restore(
+            @PathVariable UUID uuid) {
+        return ResponseEntity.ok(ApiResponse.success(priceListService.restorePriceList(uuid)));
+    }
+
+    @Operation(summary = "Listar todos las marcas eliminadas.")
+    @GetMapping("/deleted")
+    public ResponseEntity<ApiResponse<List<PriceListResponseDTO>>> getAllDeleted() {
+        return ResponseEntity.ok(ApiResponse.success(priceListService.getAllDeleted()));
+    }
+
+    //toggle_availability
+    @Operation(summary = "Alternar si el precio de lista esta o no disponible")
+    @PatchMapping("/{uuid}/toggle_availability")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> toggleAvailability(
+            @PathVariable UUID uuid) {
+        Boolean newState = priceListService.toggleAvailability(uuid);
+        return ResponseEntity.ok(ApiResponse.success(String.format("Precio de lista %s con exito", newState ? "activada" : "desactivada")));
     }
 }

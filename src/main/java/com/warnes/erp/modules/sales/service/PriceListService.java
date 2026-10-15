@@ -8,8 +8,11 @@ import java.util.UUID;
 
 public interface PriceListService {
     PriceListResponseDTO createPriceList(PriceListRequestDTO request);
-    PriceListResponseDTO getPriceListByUuid(UUID uuid);
-    List<PriceListResponseDTO> getAllPriceLists();
     PriceListResponseDTO updatePriceList(UUID uuid, PriceListRequestDTO request);
+    PriceListResponseDTO getPriceListByUuid(UUID uuid);
+    List<PriceListResponseDTO> getAllPriceLists(Boolean isActive, Boolean includeDeleted);
     void deletePriceList(UUID uuid);
+    Boolean toggleAvailability(UUID uuid);
+    PriceListResponseDTO restorePriceList(UUID uuid);
+    List<PriceListResponseDTO> getAllDeleted();
 }

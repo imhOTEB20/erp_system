@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "price_lists")
-@SQLRestriction("deleted_at IS NULL") // NUEVO: Filtro automático de Hibernate
+//@SQLRestriction("deleted_at IS NULL") // NUEVO: Filtro automático de Hibernate
 @Getter
 @Setter
 public class PriceList extends AuditableEntity implements UuidIdentifiable {
@@ -32,4 +32,6 @@ public class PriceList extends AuditableEntity implements UuidIdentifiable {
     @Column(name = "margin_percentage", nullable = false, precision = 6, scale = 2)
     private BigDecimal marginPercentage = BigDecimal.ZERO;
 
+    @Column(nullable = false)
+    private boolean active = true;
 }
