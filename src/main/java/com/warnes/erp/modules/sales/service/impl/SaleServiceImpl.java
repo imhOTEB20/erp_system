@@ -17,10 +17,7 @@ import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
-import com.warnes.erp.modules.sales.dto.request.SaleCheckoutRequestDTO;
-import com.warnes.erp.modules.sales.dto.request.SaleCreateRequestDTO;
-import com.warnes.erp.modules.sales.dto.request.SaleItemRequestDTO;
-import com.warnes.erp.modules.sales.dto.request.SalePaymentRequestDTO;
+import com.warnes.erp.modules.sales.dto.request.*;
 import com.warnes.erp.modules.sales.dto.response.SaleResponseDTO;
 import com.warnes.erp.modules.sales.entity.*;
 import com.warnes.erp.modules.sales.mapper.SaleMapper;
@@ -151,8 +148,8 @@ public class SaleServiceImpl implements SaleService {
 
     @Override
     @Transactional
-    public SaleResponseDTO registerPayments(UUID saleUuid, List<SalePaymentRequestDTO> requests, UUID originWarehouseUuid) {
-        Sale sale = saleRepository.findByUuid(saleUuid)
+    public SaleResponseDTO registerPayments(String invoiceNumber, PayRequestDTO request) {
+        Sale sale = saleRepository.findByInvoiceNumberIgnoreCase(invoiceNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada"));
 
         if (sale.getStatus() != SaleStatus.PENDING_PAYMENT) {
@@ -160,10 +157,10 @@ public class SaleServiceImpl implements SaleService {
         }
 
         // Iterar sobre cada método de pago enviado (Ej: 40% Efectivo + 60% Transferencia)
-        for (SalePaymentRequestDTO request : requests) {
+        for (SalePaymentRequestDTO paymentRequestDTO : request.payments()) {
 
             // Validaciones de Cuenta Corriente (Deuda o Saldo a favor)
-            if (request.paymentMethod() == PaymentMethod.STORE_CREDIT || request.paymentMethod() == PaymentMethod.ON_CREDIT) {
+            if (paymentRequestDTO.paymentMethod() == PaymentMethod.STORE_CREDIT || paymentRequestDTO.paymentMethod() == PaymentMethod.ON_CREDIT) {
                 if (sale.getCustomer() == null) {
                     throw new BusinessRuleException("No se puede operar con cuentas corrientes en ventas a Consumidor Final");
                 }
@@ -171,11 +168,11 @@ public class SaleServiceImpl implements SaleService {
                 Customer customer = customerRepository.findByIdForUpdate(sale.getCustomer().getId())
                         .orElseThrow(() -> new BusinessRuleException("Error de concurrencia con el cliente"));
 
-                BigDecimal projectedBalance = customer.getCurrentBalance().subtract(request.amount());
+                BigDecimal projectedBalance = customer.getCurrentBalance().subtract(paymentRequestDTO.amount());
 
-                if (request.paymentMethod() == PaymentMethod.STORE_CREDIT && projectedBalance.compareTo(BigDecimal.ZERO) < 0) {
+                if (paymentRequestDTO.paymentMethod() == PaymentMethod.STORE_CREDIT && projectedBalance.compareTo(BigDecimal.ZERO) < 0) {
                     throw new BusinessRuleException("Saldo a favor insuficiente. Disponible: $" + customer.getCurrentBalance());
-                } else if (request.paymentMethod() == PaymentMethod.ON_CREDIT) {
+                } else if (paymentRequestDTO.paymentMethod() == PaymentMethod.ON_CREDIT) {
                     BigDecimal maxAllowedDebt = customer.getCreditLimit().negate();
                     if (projectedBalance.compareTo(maxAllowedDebt) < 0) {
                         throw new BusinessRuleException("Límite de crédito excedido.");
@@ -185,16 +182,16 @@ public class SaleServiceImpl implements SaleService {
                 customer.setCurrentBalance(projectedBalance);
                 customerRepository.save(customer);
 
-                LedgerMovementType ledgerType = request.paymentMethod() == PaymentMethod.STORE_CREDIT
+                LedgerMovementType ledgerType = paymentRequestDTO.paymentMethod() == PaymentMethod.STORE_CREDIT
                         ? LedgerMovementType.PAYMENT_WITH_CREDIT
                         : LedgerMovementType.SALE_ON_CREDIT;
-                customerLedgerService.recordMovement(customer, sale, ledgerType, request.amount(), customer.getCurrentBalance());
+                customerLedgerService.recordMovement(customer, sale, ledgerType, paymentRequestDTO.amount(), customer.getCurrentBalance());
             }
 
             SalePayment payment = new SalePayment();
             payment.setSale(sale);
-            payment.setPaymentMethod(request.paymentMethod());
-            payment.setAmount(request.amount());
+            payment.setPaymentMethod(paymentRequestDTO.paymentMethod());
+            payment.setAmount(paymentRequestDTO.amount());
             sale.getPayments().add(payment);
         }
 
@@ -202,9 +199,9 @@ public class SaleServiceImpl implements SaleService {
                 .map(SalePayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Tolerancia de redondeo ($10 ARS)
+        // Tolerancia de redondeo ($200 ARS)
         BigDecimal difference = sale.getTotalAmount().subtract(totalPaid);
-        if (difference.compareTo(BigDecimal.ZERO) > 0 && difference.compareTo(new BigDecimal("10.00")) <= 0) {
+        if (difference.compareTo(BigDecimal.ZERO) > 0 && difference.compareTo(new BigDecimal("200.00")) <= 0) {
             SalePayment roundingAdjustment = new SalePayment();
             roundingAdjustment.setSale(sale);
             roundingAdjustment.setPaymentMethod(PaymentMethod.ROUNDING_ADJUSTMENT);
@@ -218,7 +215,7 @@ public class SaleServiceImpl implements SaleService {
             // Deducción de sucursal: Toma la de la caja si es POS, o la que vino por parámetro si es B2B
             UUID effectiveWarehouseUuid = sale.getCashShift() != null
                     ? sale.getCashShift().getCashRegister().getWarehouse().getUuid()
-                    : originWarehouseUuid;
+                    : request.warehouseUuid();
 
             if (effectiveWarehouseUuid == null) {
                 throw new BusinessRuleException("No se pudo determinar el almacén para deducir el stock (B2B exige originWarehouseUuid).");

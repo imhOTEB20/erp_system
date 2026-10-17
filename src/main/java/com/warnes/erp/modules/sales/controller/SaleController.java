@@ -1,6 +1,7 @@
 package com.warnes.erp.modules.sales.controller;
 
 import com.warnes.erp.common.ApiResponse;
+import com.warnes.erp.modules.sales.dto.request.PayRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleCheckoutRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleCreateRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SalePaymentRequestDTO;
@@ -50,13 +51,12 @@ public class SaleController {
     }
 
     @Operation(summary = "Registrar cobros a venta pendiente", description = "Soporta cobros mixtos simultáneos (ej: Efectivo + Tarjeta) sobre una reserva previa (E-Commerce / B2B).")
-    @PostMapping("/{uuid}/payments")
+    @PostMapping("/pay/{invoiceNumber}")
     public ResponseEntity<ApiResponse<SaleResponseDTO>> registerPayments(
-            @Parameter(description = "UUID de la venta a cobrar", required = true) @PathVariable UUID uuid,
-            @Valid @RequestBody List<SalePaymentRequestDTO> requests,
-            @Parameter(description = "UUID del almacén (Obligatorio para B2B sin caja asociada)") @RequestParam(required = false) UUID originWarehouseUuid
-    ) {
-        SaleResponseDTO response = saleService.registerPayments(uuid, requests, originWarehouseUuid);
+            @Parameter(description = "cod. de factura", required = true) @PathVariable String invoiceNumber,
+            @Valid @RequestBody PayRequestDTO request
+            ) {
+        SaleResponseDTO response = saleService.registerPayments(invoiceNumber, request);
         String message = response.status().equals("COMPLETED")
                 ? "Total cubierto. Venta completada e inventario deducido."
                 : "Pagos parciales registrados exitosamente.";

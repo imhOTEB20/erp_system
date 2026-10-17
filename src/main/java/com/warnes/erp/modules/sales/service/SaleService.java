@@ -1,5 +1,6 @@
 package com.warnes.erp.modules.sales.service;
 
+import com.warnes.erp.modules.sales.dto.request.PayRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleCheckoutRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleCreateRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SalePaymentRequestDTO;
@@ -14,7 +15,7 @@ import java.util.UUID;
 
 public interface SaleService {
     SaleResponseDTO createSale(SaleCreateRequestDTO request);
-    SaleResponseDTO registerPayments(UUID saleUuid, List<SalePaymentRequestDTO> requests, UUID originWarehouseUuid);
+    SaleResponseDTO registerPayments(String invoiceNumber, PayRequestDTO request);
     SaleResponseDTO checkout(SaleCheckoutRequestDTO request);
     SaleResponseDTO getSaleByUuid(UUID uuid);
 
