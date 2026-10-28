@@ -3,6 +3,7 @@ package com.warnes.erp.modules.catalog.service;
 import com.warnes.erp.modules.catalog.dto.request.ProductRequestDTO;
 import com.warnes.erp.modules.catalog.dto.request.ProductUpdateRequestDTO;
 import com.warnes.erp.modules.catalog.dto.response.BulkImportResponseDTO;
+import com.warnes.erp.modules.catalog.dto.response.PriceHistoryResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.catalog.entity.Product;
@@ -10,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,4 +30,5 @@ public interface ProductService {
     BulkImportResponseDTO importCrossReferencesCsv(MultipartFile file); // Agregado para tu importación CSV
 
     ProductResponseDTO getProductBySku(String sku);
+    List<PriceHistoryResponseDTO> getProductPriceHistory(UUID productUuid, ZonedDateTime from, ZonedDateTime to);
 }

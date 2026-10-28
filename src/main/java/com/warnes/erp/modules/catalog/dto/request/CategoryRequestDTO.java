@@ -12,6 +12,10 @@ public record CategoryRequestDTO(
         @Size(max = 100, message = "El nombre no puede exceder los 100 caracteres")
         String name,
 
+        @Schema(description = "Descripcion breve de la categoria")
+        @Size(max = 100, message = "La descripcion no puede exceder los 100 caracteres")
+        String description,
+
         @Schema(description = "Estado de visualización en el sistema", example = "true")
         @NotNull(message = "El estado (activo/inactivo) es obligatorio")
         Boolean active

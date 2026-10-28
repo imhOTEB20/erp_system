@@ -1,7 +1,9 @@
 package com.warnes.erp.modules.sales.mapper;
 
+import com.warnes.erp.modules.sales.dto.response.SaleItemResponseDTO;
 import com.warnes.erp.modules.sales.dto.response.SaleResponseDTO;
 import com.warnes.erp.modules.sales.entity.Sale;
+import com.warnes.erp.modules.sales.entity.SaleItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.Mappings;
@@ -24,4 +26,9 @@ public interface SaleMapper {
             @Mapping(target = "warehouseName", source = "cashShift.cashRegister.warehouse.name")
     })
     SaleResponseDTO toResponseDTO(Sale entity);
+
+    @Mapping(target = "productUuid", source = "product.uuid")
+    @Mapping(target = "productSku", source = "product.sku")
+    @Mapping(target = "productName", source = "product.name")
+    SaleItemResponseDTO toItemResponseDTO(SaleItem entity);
 }

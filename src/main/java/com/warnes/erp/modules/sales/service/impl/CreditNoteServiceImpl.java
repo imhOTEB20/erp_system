@@ -15,6 +15,7 @@ import com.warnes.erp.modules.inventory.entity.StockMovement;
 import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
+import com.warnes.erp.modules.inventory.repository.StockSpecification;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
 import com.warnes.erp.modules.sales.dto.request.CreditNoteRequestDTO;
 import com.warnes.erp.modules.sales.dto.request.SaleItemRequestDTO;
@@ -31,6 +32,7 @@ import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,7 +100,9 @@ public class CreditNoteServiceImpl implements CreditNoteService {
             totalRefundAmount = totalRefundAmount.add(subtotal);
 
             // Bloqueo pesimista: Ingresar el stock nuevamente a la bodega
-            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(originalSaleItem.getProduct().getId(), targetWarehouse.getId())
+            Specification<Stock> filter = StockSpecification.hasWarehouseUuid(targetWarehouse.getUuid())
+                    .and(StockSpecification.hasProductUuid(originalSaleItem.getProduct().getUuid()));
+            Stock stock = stockRepository.findOne(filter)
                     .orElseThrow(() -> new BusinessRuleException("Stock no inicializado en el almacén de destino"));
 
             // Cálculo matemático preciso con BigDecimal

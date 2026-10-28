@@ -1,9 +1,14 @@
 package com.warnes.erp.modules.reporting.controller;
 
+import com.warnes.erp.common.ApiResponse;
+import com.warnes.erp.modules.catalog.dto.response.PriceHistoryResponseDTO;
+import com.warnes.erp.modules.catalog.service.ProductService;
 import com.warnes.erp.modules.inventory.dto.response.StockMovementResponseDTO;
 import com.warnes.erp.modules.inventory.service.StockService;
+import com.warnes.erp.modules.reporting.entity.GroupSalesBy;
+import com.warnes.erp.modules.reporting.entity.PeriodGranularity;
 import com.warnes.erp.modules.reporting.service.PdfService;
-import com.warnes.erp.modules.sales.dto.response.SaleResponseDTO;
+import com.warnes.erp.modules.sales.dto.response.*;
 import com.warnes.erp.modules.sales.service.SaleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,9 +34,11 @@ import java.util.UUID;
 public class ReportController {
 
     private final PdfService pdfService;
+    private final ProductService productService;
     private final SaleService saleService;
     private final StockService stockService;
 
+    //SALES
     @Operation(summary = "Descargar Factura A4", description = "Retorna el array de bytes de un archivo PDF estructurado para impresión tamaño carta/A4.")
     @GetMapping("/sales/{uuid}/invoice")
     @PreAuthorize("hasAnyRole('ADMIN', 'CASHIER')")
@@ -58,6 +65,64 @@ public class ReportController {
 
         byte[] pdfBytes = pdfService.generatePdfFromHtml("ticket-80mm", data);
         return buildPdfResponse(pdfBytes, "Ticket_" + sale.invoiceNumber() + ".pdf");
+    }
+
+    @Operation(summary = "Reporte de las ventas que se completaron por categorias")
+    @GetMapping("/sales/by-category")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<SaleByCategoryResponseDTO>>> getSaleByCategory(
+            @RequestParam(required = false) UUID warehouseUuid,
+            @RequestParam(required = false) ZonedDateTime from,
+            @RequestParam(required = false) ZonedDateTime to
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(saleService.getSaleByCategory(warehouseUuid, from, to)));
+    }
+
+    @Operation(summary = "Reporte de las ventas que se completaron por periodos (DIAS, SEMANA, MES).")
+    @GetMapping("/sales/by-period")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<SaleByPeriodResponseDTO>>> getSaleByPeriod(
+            @RequestParam(required = false) UUID warehouseUuid,
+            @RequestParam(required = false) ZonedDateTime from,
+            @RequestParam(required = false) ZonedDateTime to,
+            @RequestParam(required = false, defaultValue = "DAILY") PeriodGranularity granularity
+            ) {
+        return ResponseEntity.ok(ApiResponse.success(saleService.getSaleByPeriod(warehouseUuid, granularity, from, to)));
+    }
+
+    @Operation(summary = "Margenes de ganancia segun la agrupacion (CATEGORIAS O PRODUCTO).")
+    @GetMapping("/sales/profit-margin")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<ProfitMarginResponseDTO>>> getProfitMargin(
+            @RequestParam(required = false) UUID warehouseUuid,
+            @RequestParam(required = false) ZonedDateTime from,
+            @RequestParam(required = false) ZonedDateTime to,
+            @RequestParam(required = false, defaultValue = "CATEGORY")GroupSalesBy groupBy
+            ) {
+        return ResponseEntity.ok(ApiResponse.success(saleService.getProfitMargin(warehouseUuid, groupBy, from, to)));
+    }
+
+    @Operation(summary = "Top de productos mas vendidos.")
+    @GetMapping("/sales/by-top-product")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<SaleByProductResponseDTO>>> getSaleByProduct(
+            @RequestParam(required = false) UUID warehouseUuid,
+            @RequestParam(required = false, defaultValue = "10") Integer limit,
+            @RequestParam(required = false) ZonedDateTime from,
+            @RequestParam(required = false) ZonedDateTime to
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(saleService.getSaleByProduct(warehouseUuid, limit, from, to)));
+    }
+
+    @Operation(summary = "Historial de precios de un producto por UUID.")
+    @GetMapping("/product/{uuid}/price-history")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<PriceHistoryResponseDTO>>> getPriceHistory(
+            @PathVariable UUID uuid,
+            @RequestParam(required = false) ZonedDateTime from,
+            @RequestParam(required = false) ZonedDateTime to
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(productService.getProductPriceHistory(uuid, from, to)));
     }
 
     @Operation(summary = "Descargar Reporte Kardex", description = "Retorna un reporte tabular en PDF con todo el historial de movimientos de un producto.")

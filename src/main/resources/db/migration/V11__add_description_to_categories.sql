@@ -1,0 +1,2 @@
+ALTER TABLE categories
+ADD COLUMN description VARCHAR(100) DEFAULT NULL;

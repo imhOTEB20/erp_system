@@ -2,6 +2,8 @@ package com.warnes.erp.modules.purchases.service.impl;
 
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ResourceNotFoundException;
+import com.warnes.erp.modules.activity.entity.ActivityType;
+import com.warnes.erp.modules.activity.service.ActivityLogService;
 import com.warnes.erp.modules.catalog.entity.Product;
 import com.warnes.erp.modules.catalog.entity.TaxType;
 import com.warnes.erp.modules.catalog.repository.ProductRepository;
@@ -12,6 +14,7 @@ import com.warnes.erp.modules.inventory.entity.StockMovement;
 import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
+import com.warnes.erp.modules.inventory.repository.StockSpecification;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
 import com.warnes.erp.modules.purchases.dto.request.PurchaseCreateRequestDTO;
 import com.warnes.erp.modules.purchases.dto.request.PurchaseItemRequestDTO;
@@ -28,6 +31,7 @@ import com.warnes.erp.modules.purchases.service.PurchaseService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +53,8 @@ public class PurchaseServiceImpl implements PurchaseService {
     private final TaxTypeRepository taxTypeRepository;
 
     private final PurchaseMapper purchaseMapper;
+
+    private final ActivityLogService activityLogService;
 
     @Override
     @Transactional
@@ -87,7 +93,9 @@ public class PurchaseServiceImpl implements PurchaseService {
             productRepository.save(product);
 
             // 2. Bloqueo pesimista del inventario en el almacén destino
-            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), destination.getId())
+            Specification<Stock> filter = StockSpecification.hasWarehouseUuid(destination.getUuid())
+                    .and(StockSpecification.hasProductUuid(product.getUuid()));
+            Stock stock = stockRepository.findOne(filter)
                     .orElseGet(() -> createInitialStock(product, destination));
 
             // Cálculo preciso
@@ -127,7 +135,26 @@ public class PurchaseServiceImpl implements PurchaseService {
             }
         }
 
-        return purchaseMapper.toResponseDTO(purchaseRepository.save(purchase));
+        Purchase savedPurchase = purchaseRepository.save(purchase);
+
+        activityLogService.recordDomainActivity(
+                ActivityType.PURCHASE_REGISTERED,
+                "PURCHASES",
+                "Compra registrada - Factura " + savedPurchase.getInvoiceNumber(),
+                String.format("Ingreso de mercadería del proveedor '%s' en '%s' por $%s",
+                        savedPurchase.getSupplier().getLegalName(),
+                        destination.getName(),
+                        savedPurchase.getTotalAmount()),
+                savedPurchase.getUuid(),
+                savedPurchase.getInvoiceNumber(),
+                savedPurchase.getTotalAmount(),
+                null,
+                destination,
+                null,
+                null
+        );
+
+        return purchaseMapper.toResponseDTO(savedPurchase);
     }
 
     @Override

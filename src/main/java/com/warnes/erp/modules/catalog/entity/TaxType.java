@@ -19,7 +19,7 @@ import java.util.UUID;
 //@SQLRestriction("deleted_at IS NULL") // El filtro se queda aquí
 @Getter
 @Setter
-public class TaxType extends AuditableEntity implements UuidIdentifiable { // <-- REGRESA LA HERENCIA
+public class TaxType extends AuditableEntity implements UuidIdentifiable {
 
     @UuidGenerator
     @Column(nullable = false, unique = true, updatable = false)

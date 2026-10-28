@@ -1,7 +1,11 @@
 package com.warnes.erp.modules.sales.service.impl;
 
 import com.warnes.erp.exception.BusinessRuleException;
+import com.warnes.erp.exception.InceptionException;
 import com.warnes.erp.exception.ResourceNotFoundException;
+import com.warnes.erp.modules.activity.entity.ActivityType;
+import com.warnes.erp.modules.activity.event.ErpRealtimeEvents;
+import com.warnes.erp.modules.activity.service.ActivityLogService;
 import com.warnes.erp.modules.cash.entity.CashMovement;
 import com.warnes.erp.modules.cash.entity.CashMovementType;
 import com.warnes.erp.modules.cash.entity.CashShift;
@@ -16,9 +20,13 @@ import com.warnes.erp.modules.inventory.entity.StockMovement;
 import com.warnes.erp.modules.inventory.entity.Warehouse;
 import com.warnes.erp.modules.inventory.repository.StockRepository;
 import com.warnes.erp.modules.inventory.repository.StockMovementRepository;
+import com.warnes.erp.modules.inventory.repository.StockSpecification;
 import com.warnes.erp.modules.inventory.repository.WarehouseRepository;
+import com.warnes.erp.modules.reporting.entity.GroupSalesBy;
+import com.warnes.erp.modules.reporting.entity.PeriodGranularity;
+import com.warnes.erp.modules.reporting.entity.PeriodKey;
 import com.warnes.erp.modules.sales.dto.request.*;
-import com.warnes.erp.modules.sales.dto.response.SaleResponseDTO;
+import com.warnes.erp.modules.sales.dto.response.*;
 import com.warnes.erp.modules.sales.entity.*;
 import com.warnes.erp.modules.sales.mapper.SaleMapper;
 import com.warnes.erp.modules.sales.repository.CustomerRepository;
@@ -30,6 +38,9 @@ import com.warnes.erp.modules.sales.service.SaleService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.coyote.BadRequestException;
+import org.hibernate.engine.spi.CollectionEntry;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -39,9 +50,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +72,8 @@ public class SaleServiceImpl implements SaleService {
 
     private final CustomerLedgerService customerLedgerService;
     private final InvoiceGeneratorService invoiceGeneratorService;
+    private final ActivityLogService activityLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional // Garantiza ACID en la facturación y la validación de inventario
@@ -111,7 +125,10 @@ public class SaleServiceImpl implements SaleService {
                     .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado"));
 
             // Bloqueo a nivel de base de datos para evitar Race Conditions (Double-Spend) de Stock
-            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), originWarehouse.getId())
+            Specification<Stock> filter = StockSpecification.hasWarehouseUuid(originWarehouse.getUuid())
+                    .and(StockSpecification.hasProductUuid(product.getUuid()));
+
+            Stock stock = stockRepository.findOne(filter)
                     .orElseThrow(() -> new BusinessRuleException("Stock no inicializado en el almacén origen para: " + product.getSku()));
 
             // La deducción final ocurre al pagar, pero validamos la reserva temprana
@@ -123,6 +140,7 @@ public class SaleServiceImpl implements SaleService {
 
             // Cálculo dinámico de márgenes y descuentos redondeado a 2 decimales para AFIP
             BigDecimal basePrice = product.getSalePrice();
+            BigDecimal baseCostPrice = product.getCostPrice();
             BigDecimal multiplier = BigDecimal.ONE.add(customerMargin.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
             BigDecimal finalUnitPrice = basePrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
             BigDecimal subtotal = finalUnitPrice.multiply(itemDto.quantity()).setScale(2, RoundingMode.HALF_UP);
@@ -132,6 +150,7 @@ public class SaleServiceImpl implements SaleService {
             saleItem.setProduct(product);
             saleItem.setQuantity(itemDto.quantity());
             saleItem.setUnitPrice(finalUnitPrice);
+            saleItem.setCostPrice(baseCostPrice);
             saleItem.setSubtotal(subtotal);
 
             sale.getItems().add(saleItem);
@@ -142,6 +161,20 @@ public class SaleServiceImpl implements SaleService {
 
         // Guardado en cascada de cabecera y detalle
         Sale savedSale = saleRepository.save(sale);
+
+        activityLogService.recordDomainActivity(
+                ActivityType.SALE_COMPLETED,
+                "VENTAS",
+                "Venta cobrada #" + savedSale.getInvoiceNumber(),
+                "Venta completada en " + originWarehouse.getName(),
+                savedSale.getUuid(),
+                savedSale.getInvoiceNumber(),
+                savedSale.getTotalAmount(),
+                originWarehouse,
+                null,
+                savedSale.getCustomer(),
+                null
+        );
 
         return saleMapper.toResponseDTO(savedSale);
     }
@@ -223,7 +256,9 @@ public class SaleServiceImpl implements SaleService {
             completeSaleTransaction(sale, effectiveWarehouseUuid);
         }
 
-        return saleMapper.toResponseDTO(saleRepository.save(sale));
+        Sale savedSale = saleRepository.save(sale);
+
+        return saleMapper.toResponseDTO(savedSale);
     }
 
     @Override
@@ -264,8 +299,10 @@ public class SaleServiceImpl implements SaleService {
             Product product = productRepository.findByUuid(itemDto.productUuid())
                     .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado."));
 
+            Specification<Stock> filter = StockSpecification.hasWarehouseUuid(originWarehouse.getUuid())
+                    .and(StockSpecification.hasProductUuid(product.getUuid()));
             // Lock Pesimista (FOR UPDATE) en BD: Evita la condición de carrera si 2 cajeros venden la misma bujía al mismo milisegundo
-            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(product.getId(), originWarehouse.getId())
+            Stock stock = stockRepository.findOne(filter)
                     .orElseThrow(() -> new BusinessRuleException("Stock no inicializado para: " + product.getSku()));
 
             if (stock.getQuantity().compareTo(itemDto.quantity()) < 0) {
@@ -288,6 +325,7 @@ public class SaleServiceImpl implements SaleService {
             saleItem.setSale(sale);
             saleItem.setProduct(product);
             saleItem.setQuantity(itemDto.quantity());
+            saleItem.setCostPrice(product.getCostPrice());
             saleItem.setUnitPrice(finalUnitPrice);
             saleItem.setSubtotal(subtotal);
             sale.getItems().add(saleItem);
@@ -376,7 +414,32 @@ public class SaleServiceImpl implements SaleService {
         }
 
         // Guardamos el detalle completo y retornamos el DTO limpio (sin exponer IDs)
-        return saleMapper.toResponseDTO(saleRepository.save(sale));
+        Sale savedSale = saleRepository.save(sale);
+
+        activityLogService.recordDomainActivity(
+                ActivityType.SALE_COMPLETED,
+                "VENTAS",
+                "Venta cobrada #" + savedSale.getInvoiceNumber(),
+                "Venta completada en " + originWarehouse.getName(),
+                savedSale.getUuid(),
+                savedSale.getInvoiceNumber(),
+                savedSale.getTotalAmount(),
+                originWarehouse,
+                null,
+                savedSale.getCustomer(),
+                activeShift.getCashRegister()
+        );
+
+        eventPublisher.publishEvent(new ErpRealtimeEvents.DailySalesDomainEvent(
+                "SALE_COMPLETED",
+                originWarehouse.getUuid(),
+                originWarehouse.getName(),
+                savedSale.getUuid(),
+                savedSale.getInvoiceNumber(),
+                savedSale.getTotalAmount()
+        ));
+
+        return saleMapper.toResponseDTO(savedSale);
     }
 
     private void completeSaleTransaction(Sale sale, UUID originWarehouseUuid) {
@@ -385,8 +448,9 @@ public class SaleServiceImpl implements SaleService {
 
         // 1. Bloqueo Pesimista y deducción de Stock
         for (SaleItem item : sale.getItems()) {
-            Stock stock = stockRepository.findByProductAndWarehouseForUpdate(item.getProduct().getId(), originWarehouse.getId())
-                    .orElseThrow(() -> new BusinessRuleException("Stock no inicializado"));
+            Specification<Stock> filter = StockSpecification.hasWarehouseUuid(originWarehouseUuid)
+                    .and(StockSpecification.hasProductUuid(item.getProduct().getUuid()));
+            Stock stock = stockRepository.findOne(filter).orElseThrow(() -> new BusinessRuleException("Stock no inicializado"));
 
             // Corrección: Deducción matemática precisa con BigDecimal
             BigDecimal newBalance = stock.getQuantity().subtract(item.getQuantity());
@@ -426,8 +490,31 @@ public class SaleServiceImpl implements SaleService {
                 }
             }
 
-            cashShiftRepository.save(shift);
+            CashShift savedShift = cashShiftRepository.save(shift);
             sale.setStatus(SaleStatus.COMPLETED);
+
+            activityLogService.recordDomainActivity(
+                    ActivityType.SALE_COMPLETED,
+                    "VENTAS",
+                    "Venta cobrada #" + sale.getInvoiceNumber(),
+                    "Venta completada en " + originWarehouse.getName(),
+                    sale.getUuid(),
+                    sale.getInvoiceNumber(),
+                    sale.getTotalAmount(),
+                    originWarehouse,
+                    null,
+                    sale.getCustomer(),
+                    savedShift.getCashRegister()
+            );
+
+            eventPublisher.publishEvent(new ErpRealtimeEvents.DailySalesDomainEvent(
+                    "SALE_COMPLETED",
+                    originWarehouseUuid,
+                    originWarehouse.getName(),
+                    sale.getUuid(),
+                    sale.getInvoiceNumber(),
+                    sale.getTotalAmount()
+            ));
         }
     }
 
@@ -495,5 +582,200 @@ public class SaleServiceImpl implements SaleService {
         return saleRepository.findByInvoiceNumberIgnoreCase(invoiceNumber)
                 .map(saleMapper::toResponseDTO)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró factura con el número proporcionado"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SaleByCategoryResponseDTO> getSaleByCategory(UUID warehouseUuid, ZonedDateTime from, ZonedDateTime to) {
+        List<Sale> sales = saleRepository.findAll(SaleSpecification.completedSalesInDateRange(warehouseUuid, from, to));
+
+        return new ArrayList<>(sales.stream()
+                .flatMap(sale -> sale.getItems().stream())
+                .collect(Collectors.groupingBy(
+                        saleItem -> saleItem.getProduct().getCategory().getName(),
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                saleItems -> {
+                                    BigDecimal totalAmount = saleItems.stream()
+                                            .map(SaleItem::getSubtotal)
+                                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                                    BigDecimal quantitySold = saleItems.stream()
+                                            .map(SaleItem::getQuantity)
+                                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                                    return new SaleByCategoryResponseDTO(
+                                            saleItems.getFirst().getProduct().getCategory().getName(),
+                                            totalAmount,
+                                            quantitySold
+                                    );
+                                }
+                        )
+                ))
+                .values());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SaleByProductResponseDTO> getSaleByProduct(UUID warehouseUuid, Integer limit, ZonedDateTime from, ZonedDateTime to) {
+        if (limit < 3 || limit > 100) {
+            throw new BusinessRuleException("El limite debe ser un valor entre 3 y 100.");
+        }
+
+        List<Sale> sales = saleRepository.findAll(SaleSpecification.completedSalesInDateRange(warehouseUuid, from, to));
+
+        return new ArrayList<>(sales.stream()
+                .flatMap(sale -> sale.getItems().stream())
+                .collect(Collectors.groupingBy(
+                        saleItem -> saleItem.getProduct().getUuid(),
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                saleItems -> {
+                                    BigDecimal totalAmount = saleItems.stream()
+                                            .map(SaleItem::getSubtotal)
+                                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                                    BigDecimal quantitySold = saleItems.stream()
+                                            .map(SaleItem::getQuantity)
+                                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                                    return new SaleByProductResponseDTO(
+                                            saleItems.getFirst().getProduct().getSku(),
+                                            saleItems.getFirst().getProduct().getName(),
+                                            quantitySold,
+                                            totalAmount
+                                    );
+                                }
+                        )
+                ))
+                .values())
+                .stream()
+                .sorted(Comparator.comparing(SaleByProductResponseDTO::quantitySold).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SaleByPeriodResponseDTO> getSaleByPeriod(UUID warehouseUuid, PeriodGranularity granularity, ZonedDateTime from, ZonedDateTime to) {
+        List<Sale> sales = saleRepository.findAll(SaleSpecification.completedSalesInDateRange(warehouseUuid, from, to));
+
+        return sales.stream()
+                .collect(Collectors.groupingBy(
+                        sale -> {
+                            ZonedDateTime created = sale.getCreatedAt();
+
+                            return switch (granularity) {
+                                case DAILY -> new PeriodKey(
+                                        created.toLocalDate().atStartOfDay(created.getZone()),
+                                        created.toLocalDate().atTime(23,59,59).atZone(created.getZone())
+                                );
+                                case WEEKLY -> {
+                                    ZonedDateTime startOfWeek = created.with(DayOfWeek.MONDAY)
+                                            .toLocalDate()
+                                            .atStartOfDay(created.getZone());
+                                    ZonedDateTime endOfWeek = startOfWeek.plusDays(6).withHour(23).withMinute(59).withSecond(59);
+                                    yield new PeriodKey(startOfWeek, endOfWeek);
+                                }
+                                case MONTHLY -> {
+                                    ZonedDateTime startOfMonth = created.withDayOfMonth(1).toLocalDate().atStartOfDay(created.getZone());
+                                    ZonedDateTime endOfMonth = created.withDayOfMonth(created.toLocalDate().lengthOfMonth())
+                                            .toLocalDate()
+                                            .atTime(23, 59, 59)
+                                            .atZone(created.getZone());
+                                    yield new PeriodKey(startOfMonth, endOfMonth);
+                                }
+                                default -> throw new InceptionException("Granularidad invalida. " + granularity);
+                            };
+                        },
+                        Collectors.collectingAndThen(Collectors.toList(), periodSales -> {
+                            BigDecimal totalAmount = periodSales.stream()
+                                    .map(Sale::getTotalAmount)
+                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                            BigDecimal quantitySold = periodSales.stream()
+                                    .flatMap(sale -> sale.getItems().stream())
+                                    .map(SaleItem::getQuantity)
+                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                            ZonedDateTime created = periodSales.getFirst().getCreatedAt();
+                            PeriodKey key = switch (granularity) {
+                                case DAILY -> new PeriodKey(
+                                        created.toLocalDate().atStartOfDay(created.getZone()),
+                                        created.toLocalDate().atTime(23,59,59).atZone(created.getZone())
+                                );
+                                case WEEKLY -> {
+                                    ZonedDateTime startOfWeek = created.with(DayOfWeek.MONDAY)
+                                            .toLocalDate()
+                                            .atStartOfDay(created.getZone());
+                                    ZonedDateTime endOfWeek = startOfWeek.plusDays(6).withHour(23).withMinute(59).withSecond(59);
+                                    yield new PeriodKey(startOfWeek, endOfWeek);
+                                }
+                                case MONTHLY -> {
+                                    ZonedDateTime startOfMonth = created.withDayOfMonth(1)
+                                            .toLocalDate()
+                                            .atStartOfDay(created.getZone());
+                                    ZonedDateTime endOfMonth = created.withDayOfMonth(created.toLocalDate().lengthOfMonth())
+                                            .toLocalDate()
+                                            .atTime(23, 59, 59)
+                                            .atZone(created.getZone());
+                                    yield new PeriodKey(startOfMonth, endOfMonth);
+                                }
+                                default -> throw new InceptionException("Granularidad invalida. " + granularity);
+                            };
+
+                            return new SaleByPeriodResponseDTO(key.start(), key.end(), totalAmount, quantitySold);
+                        })
+                ))
+                .values().stream()
+                .sorted(Comparator.comparing(SaleByPeriodResponseDTO::startPeriod))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProfitMarginResponseDTO> getProfitMargin(UUID warehouseUuid, GroupSalesBy groupBy, ZonedDateTime from, ZonedDateTime to) {
+        List<Sale> sales = saleRepository.findAll(SaleSpecification.completedSalesInDateRange(warehouseUuid, from, to));
+
+        return sales.stream()
+                .flatMap(sale -> sale.getItems().stream())
+                .collect(Collectors.groupingBy(
+                        saleItem -> {
+                            return switch (groupBy) {
+                                case PRODUCT -> saleItem.getProduct();
+                                case CATEGORY -> saleItem.getProduct().getCategory();
+                                default -> "NO_GROUP";
+                            };
+                        },
+                        Collectors.collectingAndThen(Collectors.toList(), items -> {
+                            String name = switch (groupBy) {
+                                case PRODUCT -> items.getFirst().getProduct().getName();
+                                case CATEGORY -> items.getFirst().getProduct().getCategory().getName();
+                                default -> "NO_GROUP";
+                            };
+
+                            BigDecimal totalRevenue = items.stream()
+                                    .map(SaleItem::getSubtotal)
+                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                            BigDecimal totalCost = items.stream()
+                                    .map(SaleItem::getCostPrice)
+                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                            BigDecimal profitAmount = totalRevenue.subtract(totalCost);
+
+                            if (totalRevenue.compareTo(BigDecimal.ZERO) == 0) {
+                                throw new ArithmeticException("El ingreso total no puede ser cero.");
+                            }
+
+                            BigDecimal marginPercentage = profitAmount
+                                    .divide(totalRevenue, 4, RoundingMode.HALF_UP)
+                                    .multiply(new BigDecimal("100"))
+                                    .setScale(2, RoundingMode.HALF_UP);
+
+                            return new ProfitMarginResponseDTO(name, totalRevenue, totalCost, profitAmount, marginPercentage);
+                        })
+                ))
+                .values().stream().toList();
     }
 }

@@ -28,6 +28,9 @@ public class Category extends AuditableEntity implements UuidIdentifiable {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(nullable = true)
+    private String description = "";
+
     @Column(nullable = false)
     private boolean active = true;
 }

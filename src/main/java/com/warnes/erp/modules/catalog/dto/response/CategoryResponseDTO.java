@@ -11,6 +11,9 @@ public record CategoryResponseDTO(
         @Schema(description = "Nombre comercial", example = "Filtros de Aceite")
         String name,
 
+        @Schema(description = "Descripcion de la categoria.")
+        String description,
+
         @Schema(description = "Estado actual", example = "true")
         boolean active
 ) {}

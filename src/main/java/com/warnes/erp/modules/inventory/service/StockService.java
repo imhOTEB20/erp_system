@@ -3,6 +3,7 @@ package com.warnes.erp.modules.inventory.service;
 import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.inventory.dto.request.InitialStockRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.StockAdjustmentRequestDTO;
+import com.warnes.erp.modules.inventory.dto.response.ProductStockAlertResponseDTO;
 import com.warnes.erp.modules.inventory.dto.response.ProductStockResponseDTO;
 import com.warnes.erp.modules.inventory.dto.response.StockMovementResponseDTO;
 
@@ -15,4 +16,8 @@ public interface StockService {
     List<StockMovementResponseDTO> getProductKardex(UUID productUuid);
     List<ProductStockResponseDTO> getProductsByWarehouse(UUID warehouseUuid);
     List<ProductSimpleResponseDTO> getProductNonStockInWarehouse(UUID warehouseUuid);
+
+    List<String> getProductNamesBelowMinStock(UUID warehouseUuid);
+    List<ProductStockAlertResponseDTO> getProductsBelowMinStockDetailed(UUID warehouseUuid);
+    List<ProductStockAlertResponseDTO> getZeroStockProductsByWarehouse(UUID warehouseUuid);
 }

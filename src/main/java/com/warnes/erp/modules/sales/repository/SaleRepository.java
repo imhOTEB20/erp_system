@@ -16,4 +16,6 @@ public interface SaleRepository extends JpaRepository<Sale, Long>, JpaSpecificat
     boolean existsByInvoiceNumberIgnoreCase(String invoiceNumber);
     // Consulta para caducidad de ventas (Time-To-Live)
     List<Sale> findByStatusAndCreatedAtBefore(SaleStatus status, ZonedDateTime time);
+
+
 }

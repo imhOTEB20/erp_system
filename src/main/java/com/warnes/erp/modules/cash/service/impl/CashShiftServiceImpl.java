@@ -2,6 +2,9 @@ package com.warnes.erp.modules.cash.service.impl;
 
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ResourceNotFoundException;
+import com.warnes.erp.modules.activity.entity.ActivityType;
+import com.warnes.erp.modules.activity.event.ErpRealtimeEvents;
+import com.warnes.erp.modules.activity.service.ActivityLogService;
 import com.warnes.erp.modules.cash.dto.request.*;
 import com.warnes.erp.modules.cash.dto.response.CashMovementResponseDTO;
 import com.warnes.erp.modules.cash.dto.response.CashShiftResponseDTO;
@@ -20,6 +23,7 @@ import com.warnes.erp.modules.cash.service.CashShiftService;
 import com.warnes.erp.modules.security.entity.User;
 import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -40,8 +44,13 @@ public class CashShiftServiceImpl implements CashShiftService {
     private final CashRegisterRepository cashRegisterRepository;
     private final CashMovementRepository cashMovementRepository;
     private final UserRepository userRepository;
+
     private final CashShiftMapper cashShiftMapper;
     private final CashMovementMapper cashMovementMapper;
+
+    private final ActivityLogService activityLogService;
+
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -62,7 +71,35 @@ public class CashShiftServiceImpl implements CashShiftService {
         shift.setExpectedBalance(request.openingBalance());
         shift.setStatus(ShiftStatus.OPEN);
 
-        return cashShiftMapper.toResponseDTO(cashShiftRepository.save(shift));
+        CashShift savedShift = cashShiftRepository.save(shift);
+
+        activityLogService.recordDomainActivity(
+                ActivityType.CASH_SHIFT_OPENED,
+                "CASH",
+                "Apertura de caja: " + savedShift.getCashRegister().getName(),
+                "Turno abierto con saldo inicial $" + savedShift.getOpeningBalance(),
+                savedShift.getUuid(),
+                savedShift.getCashRegister().getName(),
+                savedShift.getOpeningBalance(),
+                savedShift.getCashRegister().getWarehouse(),
+                null,
+                null,
+                savedShift.getCashRegister()
+        );
+
+        eventPublisher.publishEvent(new ErpRealtimeEvents.CashShiftDomainEvent(
+                savedShift.getUuid(),
+                savedShift.getStatus(),
+                savedShift.getCashRegister().getUuid(),
+                savedShift.getCashRegister().getName(),
+                savedShift.getCashRegister().getWarehouse().getUuid(),
+                savedShift.getCashRegister().getWarehouse().getName(),
+                savedShift.getOpeningBalance(),
+                null,
+                savedShift.getUser().getFullName()
+        ));
+
+        return cashShiftMapper.toResponseDTO(savedShift);
     }
 
     @Override
@@ -95,7 +132,35 @@ public class CashShiftServiceImpl implements CashShiftService {
             cashMovementRepository.save(auditMovement);
         }
 
-        return cashShiftMapper.toResponseDTO(cashShiftRepository.save(shift));
+        CashShift savedShift = cashShiftRepository.save(shift);
+
+        activityLogService.recordDomainActivity(
+                ActivityType.CASH_SHIFT_CLOSED,
+                "CASH",
+                "Cierre de caja: " + savedShift.getCashRegister().getName(),
+                "Turno cerrado con saldo declarado $" + savedShift.getDeclaredBalance(),
+                savedShift.getUuid(),
+                savedShift.getCashRegister().getName(),
+                savedShift.getDeclaredBalance(),
+                savedShift.getCashRegister().getWarehouse(),
+                null,
+                null,
+                savedShift.getCashRegister()
+        );
+
+        eventPublisher.publishEvent(new ErpRealtimeEvents.CashShiftDomainEvent(
+                savedShift.getUuid(),
+                savedShift.getStatus(),
+                savedShift.getCashRegister().getUuid(),
+                savedShift.getCashRegister().getName(),
+                savedShift.getCashRegister().getWarehouse().getUuid(),
+                savedShift.getCashRegister().getWarehouse().getName(),
+                savedShift.getOpeningBalance(),
+                savedShift.getDeclaredBalance(),
+                savedShift.getClosedByUser().getFullName()
+        ));
+
+        return cashShiftMapper.toResponseDTO(savedShift);
     }
 
     @Override

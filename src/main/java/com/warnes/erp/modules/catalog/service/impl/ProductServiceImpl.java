@@ -1,6 +1,5 @@
 package com.warnes.erp.modules.catalog.service.impl;
 
-import com.lowagie.text.Row;
 import com.warnes.erp.exception.BusinessRuleException;
 import com.warnes.erp.exception.ElementNotDeletedException;
 import com.warnes.erp.exception.InceptionException;
@@ -9,26 +8,33 @@ import com.warnes.erp.modules.catalog.dto.request.KitItemRequestDTO;
 import com.warnes.erp.modules.catalog.dto.request.ProductRequestDTO;
 import com.warnes.erp.modules.catalog.dto.request.ProductUpdateRequestDTO;
 import com.warnes.erp.modules.catalog.dto.response.BulkImportResponseDTO;
+import com.warnes.erp.modules.catalog.dto.response.PriceHistoryResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
 import com.warnes.erp.modules.catalog.entity.*;
 import com.warnes.erp.modules.catalog.mapper.ProductMapper;
 import com.warnes.erp.modules.catalog.repository.*;
 import com.warnes.erp.modules.catalog.service.ProductService;
+import com.warnes.erp.modules.catalog.repository.ProductPriceHistoryRepository;
+import com.warnes.erp.modules.security.entity.User;
+import com.warnes.erp.modules.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,6 +51,8 @@ public class ProductServiceImpl implements ProductService {
     private final TaxTypeRepository taxTypeRepository;
     private final ProductMapper productMapper;
     private final ProductCrossReferenceRepository crossReferenceRepository;
+    private final ProductPriceHistoryRepository productPriceHistoryRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -65,7 +73,23 @@ public class ProductServiceImpl implements ProductService {
         assignProductsKit(product, request);
         handleCrossReferences(product, request);
 
-        return productMapper.toResponseDTO(productRepository.save(product));
+        Product newProduct = productRepository.save(product);
+        createPriceHistory(newProduct, newProduct.getCostPrice(), newProduct.getSalePrice());
+        return productMapper.toResponseDTO(newProduct);
+    }
+
+    private void createPriceHistory(Product product, BigDecimal newCost, BigDecimal newPrice) {
+        ProductPriceHistory productPriceHistory = new ProductPriceHistory();
+        productPriceHistory.setProduct(product);
+        productPriceHistory.setOldCost(product.getCostPrice());
+        productPriceHistory.setNewCost(newCost);
+        productPriceHistory.setOldPrice(product.getSalePrice());
+        productPriceHistory.setNewPrice(newPrice);
+        productPriceHistory.setChangedByUser(
+                getCurrentAuthenticatedUser()
+        );
+
+        productPriceHistoryRepository.save(productPriceHistory);
     }
 
     private void assignProductsKit(Product product, ProductRequestDTO request) {
@@ -119,6 +143,9 @@ public class ProductServiceImpl implements ProductService {
                 .where(ProductSpecification.notDeleted());
         Product product = findByUuid(uuid);
 
+        if (request.salePrice() != null || request.costPrice() != null) {
+            createPriceHistory(product, request.costPrice(), request.salePrice());
+        }
         // 1. MapStruct actualiza los tipos simples (String, BigDecimal, Boolean) omitiendo los nulos
         productMapper.updateEntityFromDto(request, product);
 
@@ -326,6 +353,19 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado")));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<PriceHistoryResponseDTO> getProductPriceHistory(UUID productUuid, ZonedDateTime from, ZonedDateTime to) {
+        Product product =  findByUuid(productUuid);
+        List<ProductPriceHistory> productPriceHistories = productPriceHistoryRepository.findAll(
+                ProductPriceHistorySpecification.ProductPriceInRange(product.getUuid(), from, to)
+        );
+        return productPriceHistories.stream()
+                .map(productMapper::toPriceHistoryResponseDTO)
+                .sorted(Comparator.comparing(PriceHistoryResponseDTO::changedAt))
+                .collect(Collectors.toList());
+    }
+
     private Product findByUuid(UUID uuid) {
         Specification<Product> filter = Specification
                 .where(ProductSpecification.hasUuid(uuid))
@@ -334,4 +374,9 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado."));
     }
 
+    private User getCurrentAuthenticatedUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario de auditoría no encontrado"));
+    }
 }

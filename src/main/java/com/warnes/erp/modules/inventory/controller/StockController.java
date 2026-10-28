@@ -3,6 +3,7 @@ package com.warnes.erp.modules.inventory.controller;
 import com.warnes.erp.common.ApiResponse;
 import com.warnes.erp.modules.inventory.dto.request.InitialStockRequestDTO;
 import com.warnes.erp.modules.inventory.dto.request.StockAdjustmentRequestDTO;
+import com.warnes.erp.modules.inventory.dto.response.ProductStockAlertResponseDTO;
 import com.warnes.erp.modules.inventory.dto.response.ProductStockResponseDTO;
 import com.warnes.erp.modules.inventory.dto.response.StockMovementResponseDTO;
 import com.warnes.erp.modules.inventory.service.StockService;
@@ -49,6 +50,14 @@ public class StockController {
     public ResponseEntity<ApiResponse<List<StockMovementResponseDTO>>> getKardex(@PathVariable UUID productUuid) {
         List<StockMovementResponseDTO> response = stockService.getProductKardex(productUuid);
 
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "Consultar Producto con stock minimo en una sucursal", description = "Devuelve los identificadores de productos y warehouse, donde el product tenga stock por debajo del minimo.")
+    @GetMapping("/below-min/{warehouseUuid}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")
+    public ResponseEntity<ApiResponse<List<ProductStockAlertResponseDTO>>> getBelowMin(@PathVariable UUID warehouseUuid) {
+        List<ProductStockAlertResponseDTO> response = stockService.getProductsBelowMinStockDetailed(warehouseUuid);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

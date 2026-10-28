@@ -3,11 +3,13 @@ package com.warnes.erp.modules.catalog.mapper;
 import com.warnes.erp.modules.catalog.dto.request.ProductCrossReferenceRequestDTO;
 import com.warnes.erp.modules.catalog.dto.request.ProductRequestDTO;
 import com.warnes.erp.modules.catalog.dto.request.ProductUpdateRequestDTO;
+import com.warnes.erp.modules.catalog.dto.response.PriceHistoryResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductCrossReferenceResponseDTO;
 import com.warnes.erp.modules.catalog.dto.response.ProductResponseDTO;
 import com.warnes.erp.modules.catalog.entity.Product;
 import com.warnes.erp.modules.catalog.entity.ProductCrossReference;
 import com.warnes.erp.modules.catalog.dto.response.ProductSimpleResponseDTO;
+import com.warnes.erp.modules.catalog.entity.ProductPriceHistory;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -58,4 +60,9 @@ public interface ProductMapper {
                 .divide(costPrice, 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
     }
+
+    @Mapping(target = "changedAt", source = "createdAt")
+    @Mapping(target = "costPrice", source = "newCost")
+    @Mapping(target = "salePrice", source = "newPrice")
+    PriceHistoryResponseDTO toPriceHistoryResponseDTO(ProductPriceHistory entity);
 }

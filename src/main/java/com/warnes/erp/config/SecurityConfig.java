@@ -28,6 +28,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Rutas públicas de Login
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        // Rutas WebSockets
+                        .requestMatchers("/ws/**").permitAll()
                         // Rutas públicas de Swagger / OpenAPI 3
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Todo el resto requiere autenticación

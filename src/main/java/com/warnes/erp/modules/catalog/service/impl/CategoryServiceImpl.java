@@ -3,12 +3,12 @@ package com.warnes.erp.modules.catalog.service.impl;
 import com.warnes.erp.exception.ElementNotDeletedException;
 import com.warnes.erp.exception.ResourceNotFoundException;
 import com.warnes.erp.modules.catalog.dto.request.CategoryRequestDTO;
-import com.warnes.erp.modules.catalog.dto.response.BrandResponseDTO;
+
 import com.warnes.erp.modules.catalog.dto.response.CategoryResponseDTO;
-import com.warnes.erp.modules.catalog.entity.Brand;
+
 import com.warnes.erp.modules.catalog.entity.Category;
 import com.warnes.erp.modules.catalog.mapper.CategoryMapper;
-import com.warnes.erp.modules.catalog.repository.BrandSpecification;
+
 import com.warnes.erp.modules.catalog.repository.CategoryRepository;
 import com.warnes.erp.modules.catalog.repository.CategorySpecification;
 import com.warnes.erp.modules.catalog.service.CategoryService;
@@ -42,6 +42,7 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = findByUuid(uuid);
 
         category.setName(request.name());
+        category.setDescription(request.description());
         category.setActive(request.active());
 
         return categoryMapper.toResponseDTO(categoryRepository.save(category));
@@ -85,7 +86,7 @@ public class CategoryServiceImpl implements CategoryService {
             category.setDeletedAt(null);
             category.setActive(true);
         } else {
-            throw new ElementNotDeletedException("El brand no esta eliminado.");
+            throw new ElementNotDeletedException("La categoria no esta eliminada.");
         }
 
         return categoryMapper.toResponseDTO(

@@ -1,0 +1,111 @@
+[
+  {
+    "name": "Bloque y Culata",
+    "description": "Pistones, Bielas, Juntas, Retenes"
+  },
+  {
+    "name": "Distribución",
+    "description": "Correas, Cadenas, Tensores, Poleas"
+  },
+  {
+    "name": "Alimentación y Combustible",
+    "description": "Bombas, Inyectores, Tanques"
+  },
+  {
+    "name": "Componentes de Freno",
+    "description": "Pastillas, Discos, Tambores, Zapatas"
+  },
+  {
+    "name": "Hidráulica de Freno",
+    "description": "Bombas, Bombines, Servofrenos"
+  },
+  {
+    "name": "Sistemas Electrónicos",
+    "description": "Sensores ABS, Módulos"
+  },
+  {
+    "name": "Amortiguación",
+    "description": "Amortiguadores, Cazoletas, Topes"
+  },
+  {
+    "name": "Estructura y Elasticidad",
+    "description": "Espirales, Elásticos, Buje"
+  },
+  {
+    "name": "Dirección",
+    "description": "Cremalleras, Bombas Hidráulicas, Extremos, Rótulas"
+  },
+  {
+    "name": "Transmisión de Rueda",
+    "description": "Homocinéticas, Semiejes, Rulemanes"
+  },
+  {
+    "name": "Kits y Componentes de Embrague",
+    "description": "Placa, Disco, Crapodina"
+  },
+  {
+    "name": "Caja de Cambios y Diferencial",
+    "description": "Engranajes, Selectoras, Cardanes"
+  },
+  {
+    "name": "Encendido",
+    "description": "Bujías, Calentadores, Bobinas, Cables"
+  },
+  {
+    "name": "Arranque y Carga",
+    "description": "Alternadores, Motores de Arranque, Baterías"
+  },
+  {
+    "name": "Iluminación",
+    "description": "Ópticas, Faros Traseros, Lámparas Halógenas/LED"
+  },
+  {
+    "name": "Instrumental y Confort",
+    "description": "Sensores de Motor, Levantavidrios"
+  },
+  {
+    "name": "Enfriamiento del Motor",
+    "description": "Radiadores, Bombas de Agua, Termostatos"
+  },
+  {
+    "name": "Aire Acondicionado",
+    "description": "Compresores, Condensadores, Evaporadore"
+  },
+  {
+    "name": "Línea de Escape",
+    "description": "Silenciadores, Caños, Catalizadores, Sondas"
+  },
+  {
+    "name": "Filtración",
+    "description": "Filtros de Aceite, Aire, Combustible, Habitáculo"
+  },
+  {
+    "name": "Correas Auxiliares",
+    "description": "Correas Poly-V, Tensores Externos"
+  },
+  {
+    "name": "Fluidos",
+    "description": "Aceites de Motor, Transmisión, Líquidos Refrigerantes"
+  },
+  {
+    "name": "Químicos",
+    "description": "Aditivos, Limpiadores de Inyectores, Selladores"
+  },
+  {
+    "name": "Carrocería Liviana",
+    "description": "Paragolpes, Capós, Espejos, Manijas"
+  },
+  {
+    "name": "Limpieza y Visibilidad",
+    "description": "Escobillas Limpiaparabrisas"
+  },
+  {
+    "name": "Fijaciones y Tornillería",
+    "description": "Grapas, Clips, Tuercas de Seguridad"
+  },
+  {
+    "name": "Sin Categoria",
+    "description": "Productos sin categoria."
+  }
+]
+
